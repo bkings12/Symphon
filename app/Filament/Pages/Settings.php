@@ -45,6 +45,12 @@ class Settings extends Page implements HasForms
     public $mpesa_passkey;
     public $mpesa_shortcode;
     public $mpesa_environment;
+    
+    // Bank Paybill Settings
+    public $payment_type; // 'mpesa' or 'bank_stk'
+    public $bank_code;
+    public $bank_account_number;
+    public $account_reference_type; // 'bank_account' or 'phone_number'
 
     public function mount(): void
     {
@@ -64,6 +70,12 @@ class Settings extends Page implements HasForms
         $this->mpesa_passkey = Setting::get('mpesa_passkey', '');
         $this->mpesa_shortcode = Setting::get('mpesa_shortcode', '');
         $this->mpesa_environment = Setting::get('mpesa_environment', 'sandbox');
+        
+        // Load Bank Paybill Settings
+        $this->payment_type = Setting::get('payment_type', 'mpesa');
+        $this->bank_code = Setting::get('bank_code', 'kcb');
+        $this->bank_account_number = Setting::get('bank_account_number', '');
+        $this->account_reference_type = Setting::get('account_reference_type', 'phone_number');
     }
 
     public function form(Schema $schema): Schema
@@ -142,12 +154,30 @@ class Settings extends Page implements HasForms
                                     ]),
                             ]),
 
-                        Tabs\Tab::make('M-Pesa Settings')
+                        Tabs\Tab::make('Payment Settings')
                             ->icon('heroicon-o-device-phone-mobile')
                             ->schema([
+                                Section::make('Payment Type Configuration')
+                                    ->description('Select your payment gateway type')
+                                    ->icon('heroicon-o-credit-card')
+                                    ->schema([
+                                        Select::make('payment_type')
+                                            ->label('Payment Gateway Type')
+                                            ->options([
+                                                'mpesa' => 'M-Pesa STK Push',
+                                                'bank_stk' => 'Bank Paybill STK Push',
+                                            ])
+                                            ->default('mpesa')
+                                            ->required()
+                                            ->live()
+                                            ->helperText('Choose whether to use M-Pesa or Bank Paybill for STK Push payments')
+                                            ->columnSpanFull(),
+                                    ]),
+                                
                                 Section::make('M-Pesa Configuration')
                                     ->description('Configure M-Pesa payment gateway integration')
                                     ->icon('heroicon-o-credit-card')
+                                    ->visible(fn ($get) => $get('payment_type') === 'mpesa')
                                     ->schema([
                                         Toggle::make('mpesa_enabled')
                                             ->label('Enable M-Pesa Payments')
@@ -163,6 +193,46 @@ class Settings extends Page implements HasForms
                                             ])
                                             ->default('sandbox')
                                             ->required()
+                                            ->columnSpanFull(),
+                                    ]),
+                                
+                                Section::make('Bank Paybill Configuration')
+                                    ->description('Configure Bank Paybill STK Push settings')
+                                    ->icon('heroicon-o-building-library')
+                                    ->visible(fn ($get) => $get('payment_type') === 'bank_stk')
+                                    ->schema([
+                                        Select::make('bank_code')
+                                            ->label('Bank')
+                                            ->options([
+                                                'kcb' => 'KCB Bank',
+                                                'equity' => 'Equity Bank',
+                                                'coop' => 'Co-operative Bank',
+                                                'absa' => 'Absa Bank',
+                                                'ncba' => 'NCBA Bank',
+                                                'diamond' => 'Diamond Trust Bank',
+                                            ])
+                                            ->default('kcb')
+                                            ->required()
+                                            ->helperText('Select the bank for paybill payments')
+                                            ->columnSpanFull(),
+                                        
+                                        TextInput::make('bank_account_number')
+                                            ->label('Bank Account Number / Phone Number')
+                                            ->placeholder('Enter account number or phone number')
+                                            ->maxLength(255)
+                                            ->required()
+                                            ->helperText('This will be used as the account reference for payments')
+                                            ->columnSpanFull(),
+                                        
+                                        Select::make('account_reference_type')
+                                            ->label('Account Reference Type')
+                                            ->options([
+                                                'phone_number' => 'Phone Number',
+                                                'bank_account' => 'Bank Account Number',
+                                            ])
+                                            ->default('phone_number')
+                                            ->required()
+                                            ->helperText('Choose whether to use phone number or bank account as reference')
                                             ->columnSpanFull(),
                                     ]),
 
@@ -244,6 +314,9 @@ class Settings extends Page implements HasForms
             Setting::set('receipt_footer', $this->receipt_footer, 'general');
             Setting::set('low_stock_threshold', $this->low_stock_threshold, 'general');
 
+            // Save Payment Type
+            Setting::set('payment_type', $this->payment_type ?? 'mpesa', 'payment');
+            
             // Save M-Pesa Settings
             // Ensure boolean value is properly saved (cast to int then string for database storage)
             $mpesaEnabled = filter_var($this->mpesa_enabled ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -254,6 +327,11 @@ class Settings extends Page implements HasForms
             Setting::set('mpesa_passkey', $this->mpesa_passkey ?? '', 'mpesa');
             Setting::set('mpesa_shortcode', $this->mpesa_shortcode ?? '', 'mpesa');
             Setting::set('mpesa_environment', $this->mpesa_environment ?? 'sandbox', 'mpesa');
+            
+            // Save Bank Paybill Settings
+            Setting::set('bank_code', $this->bank_code ?? 'kcb', 'bank_paybill');
+            Setting::set('bank_account_number', $this->bank_account_number ?? '', 'bank_paybill');
+            Setting::set('account_reference_type', $this->account_reference_type ?? 'phone_number', 'bank_paybill');
 
             // Clear cache
             Setting::clearCache();

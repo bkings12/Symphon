@@ -25,6 +25,7 @@ class PaymentForm
                     ->options([
                         'cash' => 'Cash',
                         'mpesa' => 'M-Pesa',
+                        'bank_paybill' => 'Bank Paybill',
                         'card' => 'Card',
                         'insurance' => 'Insurance',
                         'other' => 'Other',

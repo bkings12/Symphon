@@ -71,6 +71,12 @@
             text-decoration: none;
             color: inherit;
         }
+        
+        @media (min-width: 640px) {
+            .cta-buttons {
+                flex-direction: row !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -99,19 +105,31 @@
                 
                 <!-- Auth Links -->
                 <div style="display: flex; align-items: center; gap: 1rem;">
-                    @if (Route::has('login'))
-                        @auth
-                            <a href="{{ url('/dashboard') }}" style="color: #4b5563; transition: color 0.3s;">Dashboard</a>
-                        @else
-                            <a href="{{ route('login') }}" style="color: #4b5563; transition: color 0.3s;">Log in</a>
-                            
-                            @if (Route::has('register'))
-                                <a href="{{ route('register') }}" style="padding: 0.5rem 1.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 0.5rem; transition: opacity 0.3s; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
-                                    Get Started
-                                </a>
-                            @endif
-                        @endauth
-                    @endif
+                    @auth
+                        <a href="{{ url('/dashboard') }}" 
+                           style="padding: 0.5rem 1.5rem; background: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%); color: white; border-radius: 0.5rem; font-weight: 600; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"
+                           onmouseover="this.style.background='linear-gradient(135deg, #7e22ce 0%, #2563eb 100%)'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 15px -3px rgba(0, 0, 0, 0.1)'"
+                           onmouseout="this.style.background='linear-gradient(135deg, #9333ea 0%, #3b82f6 100%)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.1)'">
+                            Go to Dashboard
+                        </a>
+                    @else
+                        @if (Route::has('register'))
+                            <a href="{{ route('register') }}" 
+                               style="padding: 0.5rem 1.5rem; background: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%); color: white; border-radius: 0.5rem; font-weight: 600; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"
+                               onmouseover="this.style.background='linear-gradient(135deg, #7e22ce 0%, #2563eb 100%)'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 15px -3px rgba(0, 0, 0, 0.1)'"
+                               onmouseout="this.style.background='linear-gradient(135deg, #9333ea 0%, #3b82f6 100%)'; this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.1)'">
+                                Get Started Free
+                            </a>
+                        @endif
+                        @if (Route::has('login'))
+                            <a href="{{ route('login') }}" 
+                               style="padding: 0.5rem 1.5rem; background-color: rgba(255, 255, 255, 0.2); backdrop-filter: blur(8px); color: #4b5563; border-radius: 0.5rem; font-weight: 600; transition: all 0.2s; border: 1px solid rgba(0, 0, 0, 0.1);"
+                               onmouseover="this.style.backgroundColor='rgba(255, 255, 255, 0.3)'; this.style.transform='translateY(-2px)'"
+                               onmouseout="this.style.backgroundColor='rgba(255, 255, 255, 0.2)'; this.style.transform='translateY(0)'">
+                                Sign In
+                            </a>
+                        @endif
+                    @endauth
                 </div>
             </div>
         </div>
@@ -291,23 +309,34 @@
             <div class="gradient-bg" style="border-radius: 1.5rem; padding: 3rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
                 <h2 style="font-size: 2.25rem; font-weight: 700; color: white; margin-bottom: 1.5rem;">Transform Your Pharmacy Today</h2>
                 <p style="font-size: 1.25rem; color: rgba(255, 255, 255, 0.9); margin-bottom: 2rem;">Join pharmacies across Kenya using Symphony to modernize their operations and grow their business.</p>
-                <div style="display: flex; flex-direction: column; gap: 1rem; justify-content: center; max-width: 500px; margin: 0 auto;">
-                    @if (Route::has('register'))
-                        <a href="{{ route('register') }}" style="padding: 1rem 2rem; background-color: white; color: #9333ea; border-radius: 0.5rem; transition: background-color 0.3s; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); text-align: center; font-weight: 600;">
-                            Start Free Trial
-                        </a>
-                    @elseif (Route::has('login'))
-                        <a href="{{ route('login') }}" style="padding: 1rem 2rem; background-color: white; color: #9333ea; border-radius: 0.5rem; transition: background-color 0.3s; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); text-align: center; font-weight: 600;">
-                            Start Free Trial
+                
+                <!-- CTA Buttons -->
+                <div class="cta-buttons" style="display: flex; flex-direction: column; gap: 1rem; justify-content: center; align-items: center; margin-bottom: 4rem;">
+                    @auth
+                        <a href="{{ url('/dashboard') }}" 
+                           style="padding: 1rem 2rem; background: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%); color: white; border-radius: 0.75rem; font-weight: 600; font-size: 1.125rem; width: 100%; max-width: 300px; text-align: center; transition: all 0.2s; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); transform: translateY(0);"
+                           onmouseover="this.style.background='linear-gradient(135deg, #7e22ce 0%, #2563eb 100%)'; this.style.boxShadow='0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'; this.style.transform='translateY(-4px)'"
+                           onmouseout="this.style.background='linear-gradient(135deg, #9333ea 0%, #3b82f6 100%)'; this.style.boxShadow='0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'; this.style.transform='translateY(0)'">
+                            Go to Dashboard
                         </a>
                     @else
-                        <a href="#features" style="padding: 1rem 2rem; background-color: white; color: #9333ea; border-radius: 0.5rem; transition: background-color 0.3s; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); text-align: center; font-weight: 600;">
-                            Explore Features
-                        </a>
-                    @endif
-                    <a href="#contact" style="padding: 1rem 2rem; background-color: rgba(255, 255, 255, 0.1); color: white; border-radius: 0.5rem; transition: background-color 0.3s; backdrop-filter: blur(8px); text-align: center; font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.2);">
-                        Contact Sales
-                    </a>
+                        @if (Route::has('register'))
+                            <a href="{{ route('register') }}" 
+                               style="padding: 1rem 2rem; background: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%); color: white; border-radius: 0.75rem; font-weight: 600; font-size: 1.125rem; width: 100%; max-width: 300px; text-align: center; transition: all 0.2s; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); transform: translateY(0);"
+                               onmouseover="this.style.background='linear-gradient(135deg, #7e22ce 0%, #2563eb 100%)'; this.style.boxShadow='0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'; this.style.transform='translateY(-4px)'"
+                               onmouseout="this.style.background='linear-gradient(135deg, #9333ea 0%, #3b82f6 100%)'; this.style.boxShadow='0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'; this.style.transform='translateY(0)'">
+                                Get Started Free
+                            </a>
+                        @endif
+                        @if (Route::has('login'))
+                            <a href="{{ route('login') }}" 
+                               style="padding: 1rem 2rem; background-color: rgba(255, 255, 255, 0.2); backdrop-filter: blur(8px); color: white; border-radius: 0.75rem; font-weight: 600; font-size: 1.125rem; width: 100%; max-width: 300px; text-align: center; transition: all 0.2s; border: 1px solid rgba(255, 255, 255, 0.3); transform: translateY(0);"
+                               onmouseover="this.style.backgroundColor='rgba(255, 255, 255, 0.3)'; this.style.transform='translateY(-4px)'"
+                               onmouseout="this.style.backgroundColor='rgba(255, 255, 255, 0.2)'; this.style.transform='translateY(0)'">
+                                Sign In
+                            </a>
+                        @endif
+                    @endauth
                 </div>
             </div>
         </div>

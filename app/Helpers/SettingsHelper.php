@@ -79,6 +79,34 @@ class SettingsHelper
     }
 
     /**
+     * Get payment type (mpesa or bank_stk)
+     */
+    public static function paymentType(): string
+    {
+        return Setting::get('payment_type', 'mpesa');
+    }
+
+    /**
+     * Check if bank paybill is enabled
+     */
+    public static function isBankPaybillEnabled(): bool
+    {
+        return self::paymentType() === 'bank_stk';
+    }
+
+    /**
+     * Get bank paybill configuration
+     */
+    public static function bankPaybillConfig(): array
+    {
+        return [
+            'bank_code' => Setting::get('bank_code', 'kcb'),
+            'bank_account_number' => Setting::get('bank_account_number', ''),
+            'account_reference_type' => Setting::get('account_reference_type', 'phone_number'),
+        ];
+    }
+
+    /**
      * Format currency amount
      */
     public static function formatCurrency(float $amount): string

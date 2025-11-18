@@ -1054,11 +1054,12 @@
                     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                         <div>
                             <label class="pos-label">Payment Method</label>
-                            <select wire:model.live="paymentMethod" class="pos-select" style="font-size: 1.0625rem;">
+                            <select wire:model.live="paymentMethod" wire:change="$refresh" class="pos-select" style="font-size: 1.0625rem;">
                                 <option value="cash">💵 Cash</option>
                                 <option value="mpesa">📱 M-Pesa</option>
-                               
+                                <option value="bank_paybill">🏦 Bank Paybill</option>
                             </select>
+                            <input type="hidden" wire:model="paymentMethod" />
                         </div>
 
                         <div class="pos-modal-info-box">
@@ -1068,12 +1069,12 @@
                             </div>
                         </div>
 
-                        @if($paymentMethod === 'mpesa')
+                        @if($paymentMethod === 'mpesa' || $paymentMethod === 'bank_paybill')
                             <div>
-                                <label class="pos-label">M-Pesa Phone Number <span style="color: red;">*</span></label>
+                                <label class="pos-label">Phone Number <span style="color: red;">*</span></label>
                                 <input 
                                     type="tel" 
-                                    wire:model.live="mpesaPhoneNumber"
+                                    wire:model.live="stkPhoneNumber"
                                     placeholder="07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX"
                                     class="pos-input"
                                     style="font-size: 1.25rem; font-weight: 600; padding: 1rem;"
@@ -1083,14 +1084,14 @@
                                     @if($selectedCustomer && $selectedCustomer['phone'])
                                         Customer phone: {{ $selectedCustomer['phone'] }} (you can change it)
                                     @else
-                                        Enter the M-Pesa registered phone number
+                                        Enter the phone number for STK Push payment
                                     @endif
                                 </p>
                             </div>
 
-                            @if(isset($mpesaStatus) && $mpesaStatus === 'pending')
+                            @if(isset($stkStatus) && $stkStatus === 'pending')
                                 <div 
-                                    wire:poll.3s="checkMpesaPaymentStatus"
+                                    wire:poll.3s="checkSTKPaymentStatus"
                                     style="background: var(--info-light); border: 2px solid var(--info); border-radius: 0.75rem; padding: 1.25rem; text-align: center;">
                                     <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                                         <svg class="animate-spin" style="width: 1.5rem; height: 1.5rem; color: var(--info);" fill="none" viewBox="0 0 24 24">
@@ -1105,7 +1106,7 @@
                                 </div>
                             @endif
 
-                            @if(isset($mpesaStatus) && $mpesaStatus === 'success')
+                            @if(isset($stkStatus) && $stkStatus === 'success')
                                 <div style="background: var(--success-light); border: 2px solid var(--success); border-radius: 0.75rem; padding: 1.25rem; text-align: center;">
                                     <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                                         <svg style="width: 1.5rem; height: 1.5rem; color: var(--success);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1114,12 +1115,12 @@
                                         <span style="color: var(--success-dark); font-weight: 700; font-size: 1rem;">Payment Successful!</span>
                                     </div>
                                     <p style="color: var(--gray-600); font-size: 0.875rem;">
-                                        M-Pesa payment has been completed successfully.
+                                        Payment has been completed successfully.
                                     </p>
                                 </div>
                             @endif
 
-                            @if(isset($mpesaStatus) && $mpesaStatus === 'failed')
+                            @if(isset($stkStatus) && $stkStatus === 'failed')
                                 <div style="background: var(--danger-light); border: 2px solid var(--danger); border-radius: 0.75rem; padding: 1.25rem; text-align: center;">
                                     <span style="color: var(--danger-dark); font-weight: 700; font-size: 1rem;">Payment Failed</span>
                                     <p style="color: var(--gray-600); font-size: 0.875rem; margin-top: 0.5rem;">
@@ -1154,7 +1155,7 @@
                             <button 
                                 wire:click="closePaymentModal"
                                 class="pos-modal-button pos-modal-button-cancel"
-                                @if(isset($mpesaStatus) && $mpesaStatus === 'pending') disabled @endif>
+                                @if(isset($stkStatus) && $stkStatus === 'pending') disabled @endif>
                                 Cancel
                             </button>
                             <button 
@@ -1162,14 +1163,13 @@
                                 wire:loading.attr="disabled"
                                 wire:target="processSale"
                                 class="pos-modal-button pos-modal-button-submit"
-                                @if(isset($mpesaStatus) && $mpesaStatus === 'pending') disabled @endif
-                                @if($paymentMethod === 'mpesa' && empty($mpesaPhoneNumber)) disabled @endif>
-                                @if($paymentMethod === 'mpesa')
+                                @if(isset($stkStatus) && $stkStatus === 'pending') disabled @endif>
+                                @if($paymentMethod === 'mpesa' || $paymentMethod === 'bank_paybill')
                                     <span wire:loading.remove wire:target="processSale">
-                                        @if(isset($mpesaStatus) && $mpesaStatus === 'pending')
+                                        @if(isset($stkStatus) && $stkStatus === 'pending')
                                             ⏳ Processing...
                                         @else
-                                            📱 Pay with M-Pesa
+                                            📱 Pay with STK Push
                                         @endif
                                     </span>
                                     <span wire:loading wire:target="processSale">Processing...</span>
@@ -1185,64 +1185,6 @@
         </div>
     @endif
 
-    <!-- M-Pesa Phone Number Modal -->
-    @isset($showPhoneModal)
-        @if($showPhoneModal)
-        <div class="pos-modal-overlay" wire:click.self="closePhoneModal" style="z-index: 50;">
-            <div class="pos-modal-content" style="max-width: 450px;">
-                <div class="pos-modal-inner">
-                    <h2 class="pos-modal-title">📱 Enter M-Pesa Phone Number</h2>
-                    
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div class="pos-modal-info-box">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="color: var(--gray-600); font-weight: 600; font-size: 1rem;">Total Amount</span>
-                                <span style="font-size: 1.5rem; font-weight: 800; color: var(--gray-900);">{{ format_currency($cartTotal) }}</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="pos-label">M-Pesa Phone Number <span style="color: red;">*</span></label>
-                            <input 
-                                type="tel" 
-                                wire:model.live="mpesaPhoneNumber"
-                                placeholder="07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX"
-                                class="pos-input"
-                                style="font-size: 1.25rem; font-weight: 600; padding: 1rem;"
-                                required
-                                autofocus
-                                wire:keydown.enter="submitPhoneNumber">
-                            <p style="color: var(--gray-500); font-size: 0.875rem; margin-top: 0.5rem;">
-                                @if($selectedCustomer && $selectedCustomer['phone'])
-                                    Customer phone: {{ $selectedCustomer['phone'] }} (you can change it)
-                                @else
-                                    Enter the M-Pesa registered phone number
-                                @endif
-                            </p>
-                        </div>
-
-                        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                            <button 
-                                wire:click="closePhoneModal"
-                                class="pos-modal-button pos-modal-button-cancel">
-                                Cancel
-                            </button>
-                            <button 
-                                wire:click="submitPhoneNumber"
-                                wire:loading.attr="disabled"
-                                wire:target="submitPhoneNumber"
-                                class="pos-modal-button pos-modal-button-submit"
-                                @if(empty($mpesaPhoneNumber)) disabled @endif>
-                                <span wire:loading.remove wire:target="submitPhoneNumber">📱 Continue with M-Pesa</span>
-                                <span wire:loading wire:target="submitPhoneNumber">Processing...</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        @endif
-    @endisset
 
     <!-- Receipt Modal -->
     @isset($showReceiptModal)

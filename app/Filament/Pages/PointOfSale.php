@@ -57,9 +57,14 @@ class PointOfSale extends Page
     public $amountPaid = 0;
     public $change = 0;
     public $mpesaPhoneNumber = '';
+    public $stkPhoneNumber = ''; // Alias for compatibility with PosComponent view
     public $mpesaProcessing = false;
+    public $stkProcessing = false; // Alias for compatibility with PosComponent view
     public $mpesaStatus = null; // 'pending', 'success', 'failed'
+    public $stkStatus = null; // Alias for compatibility with PosComponent view
     public $pendingMpesaSaleId = null; // Store sale ID for polling
+    public $pendingStkSaleId = null; // Alias for compatibility with PosComponent view
+    public $pendingStkCheckoutId = null; // For STK Push status polling
 
     // UI State
     public $showCustomerModal = false;
@@ -87,8 +92,12 @@ class PointOfSale extends Page
         $this->showPhoneModal = false;
         $this->showReceiptModal = false;
         $this->mpesaPhoneNumber = '';
+        $this->stkPhoneNumber = '';
         $this->mpesaStatus = null;
+        $this->stkStatus = null;
         $this->pendingMpesaSaleId = null;
+        $this->pendingStkSaleId = null;
+        $this->pendingStkCheckoutId = null;
         $this->resetCart();
         $this->loadDefaultMedicines();
     }
@@ -330,32 +339,53 @@ class PointOfSale extends Page
         // Only set phone number if customer has one, otherwise keep it empty
         if ($this->selectedCustomer && isset($this->selectedCustomer['phone']) && !empty($this->selectedCustomer['phone'])) {
             $this->mpesaPhoneNumber = $this->selectedCustomer['phone'];
+            $this->stkPhoneNumber = $this->selectedCustomer['phone'];
         } else {
             $this->mpesaPhoneNumber = '';
+            $this->stkPhoneNumber = '';
         }
         $this->mpesaStatus = null;
+        $this->stkStatus = null;
         $this->showPhoneModal = false;
         $this->showPaymentModal = true;
     }
     
     public function updatedPaymentMethod()
     {
-        if ($this->paymentMethod === 'mpesa') {
+        if ($this->paymentMethod === 'mpesa' || $this->paymentMethod === 'bank_paybill') {
             // Pre-fill phone number if customer is selected, otherwise leave empty
             if ($this->selectedCustomer && isset($this->selectedCustomer['phone']) && !empty($this->selectedCustomer['phone'])) {
                 $this->mpesaPhoneNumber = $this->selectedCustomer['phone'];
+                $this->stkPhoneNumber = $this->selectedCustomer['phone'];
             } else {
                 $this->mpesaPhoneNumber = '';
+                $this->stkPhoneNumber = '';
             }
             $this->mpesaStatus = null;
+            $this->stkStatus = null;
             $this->showPhoneModal = false;
         } else {
             // Clear M-Pesa related fields when switching to other payment methods
             $this->mpesaPhoneNumber = '';
+            $this->stkPhoneNumber = '';
             $this->mpesaStatus = null;
+            $this->stkStatus = null;
             $this->mpesaProcessing = false;
+            $this->stkProcessing = false;
             $this->showPhoneModal = false;
         }
+    }
+
+    public function updatedStkPhoneNumber()
+    {
+        // Keep both properties in sync
+        $this->mpesaPhoneNumber = $this->stkPhoneNumber;
+    }
+
+    public function updatedMpesaPhoneNumber()
+    {
+        // Keep both properties in sync
+        $this->stkPhoneNumber = $this->mpesaPhoneNumber;
     }
 
     public function processSale()
@@ -365,17 +395,22 @@ class PointOfSale extends Page
             return;
         }
 
-        // Check for M-Pesa payment method FIRST
+        // Check for M-Pesa or Bank Paybill payment method FIRST
         $currentPaymentMethod = trim((string)$this->paymentMethod);
-        if (strtolower($currentPaymentMethod) === 'mpesa') {
-            // Route to M-Pesa payment processing
+        $paymentMethodLower = strtolower($currentPaymentMethod);
+        
+        if ($paymentMethodLower === 'mpesa' || $paymentMethodLower === 'bank_paybill') {
+            // Route to STK Push payment processing (both M-Pesa and Bank Paybill)
             $this->updateCartTotals();
             
             // Validate cartTotal is NOT the phone number
-            if (isset($this->mpesaPhoneNumber) && 
+            if ((isset($this->mpesaPhoneNumber) && 
                 ($this->cartTotal == $this->mpesaPhoneNumber || 
-                 (string)$this->cartTotal === (string)$this->mpesaPhoneNumber ||
-                 !is_numeric($this->cartTotal))) {
+                 (string)$this->cartTotal === (string)$this->mpesaPhoneNumber)) ||
+                (isset($this->stkPhoneNumber) && 
+                ($this->cartTotal == $this->stkPhoneNumber || 
+                 (string)$this->cartTotal === (string)$this->stkPhoneNumber)) ||
+                 !is_numeric($this->cartTotal)) {
                 $this->dispatch('notify', message: 'Error: Cart total is invalid. Please refresh the page.', type: 'error');
                 return;
             }
@@ -567,14 +602,17 @@ class PointOfSale extends Page
 
     public function processMpesaPayment()
     {
+        // Get phone number - check both properties
+        $phoneNumber = trim($this->stkPhoneNumber ?? $this->mpesaPhoneNumber ?? '');
+        
         // Validate phone number - show modal if empty
-        if (empty(trim($this->mpesaPhoneNumber))) {
+        if (empty($phoneNumber)) {
             $this->showPhoneModal = true;
             return;
         }
 
         // Validate phone number format
-        if (!validate_phone_number($this->mpesaPhoneNumber)) {
+        if (!validate_phone_number($phoneNumber)) {
             $this->dispatch('notify', message: 'Invalid phone number format. Use 07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX', type: 'error');
             return;
         }
@@ -589,16 +627,18 @@ class PointOfSale extends Page
         }
 
         // Format phone number using helper
-        $phoneNumber = format_phone_number($this->mpesaPhoneNumber);
+        $phoneNumber = format_phone_number($phoneNumber);
 
-        // Check if M-Pesa is enabled
+        // Check if M-Pesa is enabled (required for both M-Pesa and Bank Paybill)
         if (!SettingsHelper::isMpesaEnabled()) {
             $this->dispatch('notify', message: 'M-Pesa payments are not enabled. Please configure in settings.', type: 'error');
             return;
         }
 
         $this->mpesaProcessing = true;
+        $this->stkProcessing = true;
         $this->mpesaStatus = 'pending';
+        $this->stkStatus = 'pending';
 
         try {
             DB::beginTransaction();
@@ -696,12 +736,17 @@ class PointOfSale extends Page
                 throw new \Exception('Invalid payment amount: ' . $calculatedTotal);
             }
             
+            // Determine payment method (check both paymentMethod and handle legacy mpesaPhoneNumber)
+            $paymentMethodLower = strtolower(trim((string)($this->paymentMethod ?? 'mpesa')));
+            $isBankPaybill = $paymentMethodLower === 'bank_paybill';
+            $paymentMethod = $isBankPaybill ? 'bank_paybill' : 'mpesa';
+            
             $payment = Payment::create([
                 'sale_id' => $sale->id,
-                'payment_method' => 'mpesa',
+                'payment_method' => $paymentMethod,
                 'amount' => $paymentAmount,
-                'reference_number' => 'MPESA-PENDING-' . strtoupper(uniqid()),
-                'notes' => 'M-Pesa STK Push - Pending',
+                'reference_number' => ($isBankPaybill ? 'BANK-PAYBILL-PENDING-' : 'MPESA-PENDING-') . strtoupper(uniqid()),
+                'notes' => ($isBankPaybill ? 'Bank Paybill' : 'M-Pesa') . ' STK Push - Pending',
                 'status' => 'pending',
             ]);
 
@@ -709,21 +754,95 @@ class PointOfSale extends Page
 
             // Store sale ID for polling
             $this->pendingMpesaSaleId = $sale->id;
+            $this->pendingStkSaleId = $sale->id;
             
-            // Initiate STK Push
-            $this->initiateSTKPush($sale->id, $phoneNumber, $paymentAmount, $invoiceNumber);
+            // Initiate STK Push (M-Pesa or Bank Paybill)
+            if ($isBankPaybill) {
+                $this->initiateBankPaybillSTKPush($sale->id, $phoneNumber, $paymentAmount, $invoiceNumber);
+            } else {
+                $this->initiateSTKPush($sale->id, $phoneNumber, $paymentAmount, $invoiceNumber);
+            }
 
         } catch (\Exception $e) {
             DB::rollBack();
             $this->mpesaProcessing = false;
+            $this->stkProcessing = false;
             $this->mpesaStatus = 'failed';
-            $this->dispatch('notify', message: 'Error initiating M-Pesa payment: ' . $e->getMessage(), type: 'error');
+            $this->stkStatus = 'failed';
+            $this->dispatch('notify', message: 'Error initiating payment: ' . $e->getMessage(), type: 'error');
+        }
+    }
+
+    public function initiateBankPaybillSTKPush($saleId, $phoneNumber, $amount, $accountNumber)
+    {
+        try {
+            // M-Pesa requires integer amounts (no decimals)
+            $amount = (int) round((float) $amount);
+            
+            // Get bank configuration from settings
+            $bankCode = \App\Models\Setting::get('bank_code', 'kcb');
+            $bankAccountNumber = \App\Models\Setting::get('bank_account_number', '');
+            $accountReferenceType = \App\Models\Setting::get('account_reference_type', 'phone_number');
+            
+            // Determine account reference based on settings
+            $accountReference = $accountReferenceType === 'phone_number' ? $phoneNumber : $bankAccountNumber;
+            
+            $url = config('app.url') . '/api/bank-paybill/stk-push';
+            
+            $response = \Illuminate\Support\Facades\Http::post($url, [
+                'amount' => $amount,
+                'phonenumber' => $phoneNumber,
+                'account_number' => $accountReference,
+                'bank_code' => $bankCode,
+                'sale_id' => $saleId,
+            ]);
+
+            $result = $response->json();
+
+            // Store the merchant and checkout request IDs
+            if (isset($result['checkout_request_id']) && isset($result['merchant_request_id'])) {
+                $this->pendingStkSaleId = $saleId;
+                $this->pendingStkCheckoutId = $result['checkout_request_id'];
+                $this->pendingMpesaSaleId = $saleId; // For compatibility
+
+                // Check if status is '0' (success) - ResponseCode from M-Pesa API
+                $responseStatus = $result['status'] ?? $result['ResponseCode'] ?? null;
+                if ($responseStatus == '0' || $responseStatus === 0) {
+                    // Set status to pending so polling starts
+                    $this->stkStatus = 'pending';
+                    $this->mpesaStatus = 'pending';
+                    $this->dispatch('notify', message: 'Payment request sent. Please check your phone.', type: 'success');
+                } else {
+                    $this->stkProcessing = false;
+                    $this->mpesaProcessing = false;
+                    $this->stkStatus = 'failed';
+                    $this->mpesaStatus = 'failed';
+                    $errorMessage = $result['message'] ?? $result['ResponseDescription'] ?? 'Failed to initiate payment';
+                    $this->dispatch('notify', message: $errorMessage, type: 'error');
+                }
+            } else {
+                $this->stkProcessing = false;
+                $this->mpesaProcessing = false;
+                $this->stkStatus = 'failed';
+                $this->mpesaStatus = 'failed';
+                $errorMessage = $result['message'] ?? $result['ResponseDescription'] ?? 'Failed to initiate payment';
+                $this->dispatch('notify', message: $errorMessage, type: 'error');
+            }
+        } catch (\Exception $e) {
+            $this->stkProcessing = false;
+            $this->mpesaProcessing = false;
+            $this->stkStatus = 'failed';
+            $this->mpesaStatus = 'failed';
+            $this->dispatch('notify', message: 'Error: ' . $e->getMessage(), type: 'error');
         }
     }
 
     public function initiateSTKPush($saleId, $phoneNumber, $amount, $accountNumber)
     {
         try {
+            // M-Pesa requires integer amounts (no decimals)
+            $amount = (int) round((float) $amount);
+            
             $response = Mpesa::stkpush(
                 phonenumber: $phoneNumber,
                 amount: $amount,
@@ -744,44 +863,65 @@ class PointOfSale extends Page
                 ]);
 
                 if (isset($result['ResponseCode']) && $result['ResponseCode'] == '0') {
+                    // Set status to pending so polling starts
+                    $this->mpesaStatus = 'pending';
+                    $this->stkStatus = 'pending';
                     $this->dispatch('notify', message: 'M-Pesa payment request sent. Please check your phone.', type: 'success');
                     // Keep modal open to wait for callback
                 } else {
                     $this->mpesaProcessing = false;
+                    $this->stkProcessing = false;
                     $this->mpesaStatus = 'failed';
+                    $this->stkStatus = 'failed';
                     $errorMessage = $result['errorMessage'] ?? $result['CustomerMessage'] ?? 'Failed to initiate M-Pesa payment';
                     $this->dispatch('notify', message: $errorMessage, type: 'error');
                 }
             } else {
                 $this->mpesaProcessing = false;
+                $this->stkProcessing = false;
                 $this->mpesaStatus = 'failed';
+                $this->stkStatus = 'failed';
                 $errorMessage = $result['errorMessage'] ?? $result['CustomerMessage'] ?? 'Failed to initiate M-Pesa payment';
                 $this->dispatch('notify', message: $errorMessage, type: 'error');
             }
         } catch (\Exception $e) {
             $this->mpesaProcessing = false;
+            $this->stkProcessing = false;
             $this->mpesaStatus = 'failed';
+            $this->stkStatus = 'failed';
             $this->dispatch('notify', message: 'Error: ' . $e->getMessage(), type: 'error');
         }
     }
 
     public function checkMpesaPaymentStatus()
     {
-        if (!$this->pendingMpesaSaleId || $this->mpesaStatus !== 'pending') {
+        // Alias for compatibility - call the main method
+        $this->checkSTKPaymentStatus();
+    }
+
+    public function checkSTKPaymentStatus()
+    {
+        if ((!$this->pendingMpesaSaleId && !$this->pendingStkSaleId) || 
+            ($this->mpesaStatus !== 'pending' && $this->stkStatus !== 'pending')) {
             return;
         }
 
-        // Check if payment has been completed
-        $payment = Payment::where('sale_id', $this->pendingMpesaSaleId)
-            ->where('payment_method', 'mpesa')
+        $saleId = $this->pendingMpesaSaleId ?? $this->pendingStkSaleId;
+
+        // Check if payment has been completed (M-Pesa or Bank Paybill)
+        $payment = Payment::where('sale_id', $saleId)
+            ->whereIn('payment_method', ['mpesa', 'bank_paybill'])
             ->where('status', 'completed')
             ->first();
 
         if ($payment) {
             // Payment completed!
             $this->mpesaStatus = 'success';
+            $this->stkStatus = 'success';
             $this->mpesaProcessing = false;
+            $this->stkProcessing = false;
             $this->pendingMpesaSaleId = null;
+            $this->pendingStkSaleId = null;
 
             // Load sale data for receipt
             $sale = Sale::with(['items.medicine', 'customer', 'payments'])->find($payment->sale_id);
@@ -802,7 +942,7 @@ class PointOfSale extends Page
             }
         } else {
             // Check if payment failed (check MpesaSTK for error)
-            $stkPush = MpesaSTK::where('sale_id', $this->pendingMpesaSaleId)
+            $stkPush = MpesaSTK::where('sale_id', $saleId)
                 ->whereNotNull('result_code')
                 ->where('result_code', '!=', '0')
                 ->first();
@@ -810,8 +950,11 @@ class PointOfSale extends Page
             if ($stkPush) {
                 // Payment failed
                 $this->mpesaStatus = 'failed';
+                $this->stkStatus = 'failed';
                 $this->mpesaProcessing = false;
+                $this->stkProcessing = false;
                 $this->pendingMpesaSaleId = null;
+                $this->pendingStkSaleId = null;
                 $this->dispatch('notify', message: 'M-Pesa payment failed: ' . ($stkPush->result_desc ?? 'Unknown error'), type: 'error');
             }
         }
@@ -829,9 +972,14 @@ class PointOfSale extends Page
         $this->amountPaid = 0;
         $this->change = 0;
         $this->mpesaPhoneNumber = '';
+        $this->stkPhoneNumber = '';
         $this->mpesaProcessing = false;
+        $this->stkProcessing = false;
         $this->mpesaStatus = null;
+        $this->stkStatus = null;
         $this->pendingMpesaSaleId = null;
+        $this->pendingStkSaleId = null;
+        $this->pendingStkCheckoutId = null;
         $this->showPhoneModal = false;
         $this->search = '';
         $this->searchResults = [];

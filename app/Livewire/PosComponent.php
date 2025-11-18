@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Helpers\SettingsHelper;
+use App\Models\BankPaybillStk;
 use App\Models\Customer;
 use App\Models\Medicine;
 use App\Models\MpesaSTK;
@@ -10,10 +11,12 @@ use App\Models\Payment;
 use App\Models\Pharmacy;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\Setting;
 use App\Models\StockBatch;
 use Iankumu\Mpesa\Facades\Mpesa;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 
@@ -44,14 +47,15 @@ class PosComponent extends Component
     public $paymentMethod = 'cash';
     public $amountPaid = 0;
     public $change = 0;
-    public $mpesaPhoneNumber = '';
-    public $mpesaProcessing = false;
-    public $mpesaStatus = null; // 'pending', 'success', 'failed'
+    public $stkPhoneNumber = ''; // Phone number for both M-Pesa and Bank STK
+    public $stkProcessing = false;
+    public $stkStatus = null; // 'pending', 'success', 'failed'
+    public $pendingStkSaleId = null;
+    public $pendingStkCheckoutId = null;
 
     // UI State
     public $showCustomerModal = false;
     public $showPaymentModal = false;
-    public $showPhoneModal = false;
     public $showReceiptModal = false;
     public $processingSale = false;
     
@@ -73,6 +77,8 @@ class PosComponent extends Component
         $this->taxRate = SettingsHelper::taxRateDecimal();
         $this->showPhoneModal = false;
         $this->showReceiptModal = false;
+        $this->stkPhoneNumber = '';
+        $this->stkStatus = null;
         $this->resetCart();
         $this->loadDefaultMedicines();
     }
@@ -313,33 +319,36 @@ class PosComponent extends Component
         $this->change = 0;
         // Only set phone number if customer has one, otherwise keep it empty
         if ($this->selectedCustomer && isset($this->selectedCustomer['phone']) && !empty($this->selectedCustomer['phone'])) {
-            $this->mpesaPhoneNumber = $this->selectedCustomer['phone'];
+            $this->stkPhoneNumber = $this->selectedCustomer['phone'];
         } else {
-            $this->mpesaPhoneNumber = '';
+            $this->stkPhoneNumber = '';
         }
-        $this->mpesaStatus = null;
-        $this->showPhoneModal = false;
+        $this->stkStatus = null;
         $this->showPaymentModal = true;
     }
 
     public function updatedPaymentMethod()
     {
-        if ($this->paymentMethod === 'mpesa') {
+        if ($this->paymentMethod === 'mpesa' || $this->paymentMethod === 'bank_paybill') {
             // Pre-fill phone number if customer is selected, otherwise leave empty
             if ($this->selectedCustomer && isset($this->selectedCustomer['phone']) && !empty($this->selectedCustomer['phone'])) {
-                $this->mpesaPhoneNumber = $this->selectedCustomer['phone'];
+                $this->stkPhoneNumber = $this->selectedCustomer['phone'];
             } else {
-                $this->mpesaPhoneNumber = '';
+                $this->stkPhoneNumber = '';
             }
-            $this->mpesaStatus = null;
-            $this->showPhoneModal = false;
+            $this->stkStatus = null;
         } else {
-            // Clear M-Pesa related fields when switching to other payment methods
-            $this->mpesaPhoneNumber = '';
-            $this->mpesaStatus = null;
-            $this->mpesaProcessing = false;
-            $this->showPhoneModal = false;
+            // Clear STK related fields when switching to other payment methods
+            $this->stkPhoneNumber = '';
+            $this->stkStatus = null;
+            $this->stkProcessing = false;
         }
+    }
+
+    public function updatedStkPhoneNumber()
+    {
+        // This ensures Livewire tracks changes to stkPhoneNumber
+        // The property is already reactive via wire:model.live, but this helps with button state
     }
 
     public function processSale()
@@ -360,56 +369,93 @@ class PosComponent extends Component
         // Only proceed if modal is open and user has interacted with it
         // For M-Pesa, handle differently - check FIRST before any other processing
         // Use strict comparison and ensure it's a string
+        // Force refresh the payment method property
+        $this->paymentMethod = $this->paymentMethod ?? 'cash';
         $currentPaymentMethod = trim((string)$this->paymentMethod);
         $paymentMethodLower = strtolower($currentPaymentMethod);
         
-        // Debug: Log the payment method
+        // Debug: Log the payment method with full context
         Log::info('processSale called', [
+            'raw_paymentMethod' => $this->paymentMethod,
+            'paymentMethod_type' => gettype($this->paymentMethod),
             'paymentMethod' => $currentPaymentMethod,
             'paymentMethodLower' => $paymentMethodLower,
-            'isMpesa' => ($paymentMethodLower === 'mpesa'),
+            'isSTK' => ($paymentMethodLower === 'mpesa' || $paymentMethodLower === 'bank_paybill'),
             'cartTotal' => $this->cartTotal,
-            'mpesaPhoneNumber' => $this->mpesaPhoneNumber,
+            'stkPhoneNumber' => $this->stkPhoneNumber,
+            'showPaymentModal' => $this->showPaymentModal,
+            'all_properties' => [
+                'paymentMethod' => $this->paymentMethod,
+                'stkPhoneNumber' => $this->stkPhoneNumber,
+            ],
         ]);
         
-        // CRITICAL: Check for M-Pesa FIRST and handle separately - this MUST return
-        if ($paymentMethodLower === 'mpesa') {
-            Log::info('Routing to M-Pesa payment flow');
-            // Ensure cartTotal is recalculated before processing M-Pesa
+        // CRITICAL: Check for STK Push payments (M-Pesa or Bank Paybill) - this MUST return
+        // Use in_array for more reliable checking
+        $stkPaymentMethods = ['mpesa', 'bank_paybill'];
+        $isSTKPayment = in_array($paymentMethodLower, $stkPaymentMethods) || 
+                       in_array($currentPaymentMethod, $stkPaymentMethods) ||
+                       in_array($this->paymentMethod, $stkPaymentMethods);
+        
+        if ($isSTKPayment) {
+            Log::info('Routing to STK Push payment flow', [
+                'paymentMethod' => $paymentMethodLower,
+                'stkPhoneNumber' => $this->stkPhoneNumber,
+                'cartTotal' => $this->cartTotal,
+            ]);
+            
+            // Ensure cartTotal is recalculated before processing
             $this->updateCartTotals();
             
             // Final validation - ensure cartTotal is NOT the phone number
-            if ($this->cartTotal == $this->mpesaPhoneNumber || 
-                (string)$this->cartTotal === (string)$this->mpesaPhoneNumber ||
+            if ($this->cartTotal == $this->stkPhoneNumber || 
+                (string)$this->cartTotal === (string)$this->stkPhoneNumber ||
                 !is_numeric($this->cartTotal)) {
-                Log::error('Cart total is invalid for M-Pesa', [
+                Log::error('Cart total is invalid for STK Push', [
                     'cartTotal' => $this->cartTotal,
-                    'mpesaPhoneNumber' => $this->mpesaPhoneNumber,
+                    'stkPhoneNumber' => $this->stkPhoneNumber,
                 ]);
                 $this->dispatch('notify', message: 'Error: Cart total is invalid. Please refresh the page.', type: 'error');
                 return;
             }
             
-            $this->processMpesaPayment();
+            Log::info('Calling processSTKPayment', [
+                'paymentMethod' => $paymentMethodLower,
+                'stkPhoneNumber' => $this->stkPhoneNumber,
+            ]);
+            
+            $this->processSTKPayment();
+            
+            Log::info('processSTKPayment completed, returning from processSale');
             return; // CRITICAL: Must return here
         }
         
-        // If we reach here, it's NOT M-Pesa, so proceed with regular payment
+        // If we reach here, it's NOT M-Pesa or Bank Paybill, so proceed with regular payment
+        // Safety check: If payment method is STK-related but we're here, something is wrong
+        if (in_array($paymentMethodLower, ['mpesa', 'bank_paybill'])) {
+            Log::error('CRITICAL: Payment method is STK but reached regular flow!', [
+                'paymentMethod' => $currentPaymentMethod,
+                'paymentMethodLower' => $paymentMethodLower,
+            ]);
+            $this->dispatch('notify', message: 'Error: Payment method mismatch. Please refresh and try again.', type: 'error');
+            return;
+        }
+        
         Log::info('Proceeding with regular payment flow', ['paymentMethod' => $currentPaymentMethod]);
 
         // Recalculate cart totals to ensure they're correct
         $this->updateCartTotals();
         
         // CRITICAL: Check if cartTotal has been corrupted with phone number
-        if ($this->cartTotal == $this->mpesaPhoneNumber || 
-            (string)$this->cartTotal === (string)$this->mpesaPhoneNumber ||
+        if ($this->cartTotal == $this->stkPhoneNumber || 
+            (string)$this->cartTotal === (string)$this->stkPhoneNumber ||
             !is_numeric($this->cartTotal) || 
             $this->cartTotal <= 0) {
             // If corrupted, recalculate from cart
             $this->updateCartTotals();
             // Check again
-            if ($this->cartTotal == $this->mpesaPhoneNumber || !is_numeric($this->cartTotal) || $this->cartTotal <= 0) {
-                $this->dispatch('notify', message: 'Error: Cart total is invalid. CartTotal: ' . $this->cartTotal . ', Phone: ' . $this->mpesaPhoneNumber . '. Please refresh the page.', type: 'error');
+            if ($this->cartTotal == $this->stkPhoneNumber || !is_numeric($this->cartTotal) || $this->cartTotal <= 0) {
+                $this->dispatch('notify', message: 'Error: Cart total is invalid. CartTotal: ' . $this->cartTotal . ', Phone: ' . $this->stkPhoneNumber . '. Please refresh the page.', type: 'error');
                 return;
             }
         }
@@ -452,8 +498,8 @@ class PosComponent extends Component
                 }
                 
                 // CRITICAL: Ensure calculated total is NOT the phone number
-                if ($calculatedTotal == $this->mpesaPhoneNumber || (string)$calculatedTotal === (string)$this->mpesaPhoneNumber) {
-                    throw new \Exception('Calculated total matches phone number! Total: ' . $calculatedTotal . ', Phone: ' . $this->mpesaPhoneNumber);
+                if ($calculatedTotal == $this->stkPhoneNumber || (string)$calculatedTotal === (string)$this->stkPhoneNumber) {
+                    throw new \Exception('Calculated total matches phone number! Total: ' . $calculatedTotal . ', Phone: ' . $this->stkPhoneNumber);
                 }
 
                 // Generate invoice number
@@ -465,7 +511,7 @@ class PosComponent extends Component
                     'calculatedTax' => $calculatedTax,
                     'calculatedDiscount' => $calculatedDiscount,
                     'calculatedTotal' => $calculatedTotal,
-                    'mpesaPhoneNumber' => $this->mpesaPhoneNumber,
+                    'stkPhoneNumber' => $this->stkPhoneNumber,
                     'paymentMethod' => $this->paymentMethod,
                 ]);
                 
@@ -546,11 +592,11 @@ class PosComponent extends Component
                 }
                 
                 // Check 2: Ensure it's not the phone number (compare as both string and number)
-                $phoneAsNumber = (float)$this->mpesaPhoneNumber;
+                $phoneAsNumber = (float)$this->stkPhoneNumber;
                 if ($paymentAmount == $phoneAsNumber || 
-                    (string)$paymentAmount === (string)$this->mpesaPhoneNumber ||
+                    (string)$paymentAmount === (string)$this->stkPhoneNumber ||
                     abs($paymentAmount - $phoneAsNumber) < 0.01) {
-                    throw new \Exception('Payment amount matches phone number! Amount: ' . $paymentAmount . ', Phone: ' . $this->mpesaPhoneNumber . ', CalculatedTotal: ' . $calculatedTotal);
+                    throw new \Exception('Payment amount matches phone number! Amount: ' . $paymentAmount . ', Phone: ' . $this->stkPhoneNumber . ', CalculatedTotal: ' . $calculatedTotal);
                 }
                 
                 // Check 3: Sanity check - reasonable amount range
@@ -558,10 +604,11 @@ class PosComponent extends Component
                     throw new \Exception('Payment amount out of reasonable range: ' . $paymentAmount);
                 }
                 
-                // Check 4: Ensure payment method is not mpesa in regular flow
+                // Check 4: Ensure payment method is not mpesa or bank_paybill in regular flow
                 $paymentMethod = trim((string)$this->paymentMethod);
-                if (strtolower($paymentMethod) === 'mpesa') {
-                    throw new \Exception('M-Pesa payment should use processMpesaPayment method. Current method: "' . $paymentMethod . '"');
+                $paymentMethodLower = strtolower($paymentMethod);
+                if ($paymentMethodLower === 'mpesa' || $paymentMethodLower === 'bank_paybill') {
+                    throw new \Exception('STK Push payment should use processSTKPayment method. Current method: "' . $paymentMethod . '"');
                 }
                 
                 // Final validation: Compare with calculated total to ensure they match
@@ -588,7 +635,6 @@ class PosComponent extends Component
 
             $this->resetCart();
             $this->showPaymentModal = false;
-            $this->showPhoneModal = false;
             $this->showReceiptModal = true;
             $this->processingSale = false;
             
@@ -600,35 +646,24 @@ class PosComponent extends Component
         }
     }
 
-    public function submitPhoneNumber()
+    // Removed submitPhoneNumber - phone number is now entered directly in payment modal
+
+    public function processSTKPayment()
     {
-        // Validate phone number
-        if (empty(trim($this->mpesaPhoneNumber))) {
-            $this->dispatch('notify', message: 'Please enter M-Pesa phone number', type: 'error');
+        Log::info('processSTKPayment called', [
+            'stkPhoneNumber' => $this->stkPhoneNumber,
+            'paymentMethod' => $this->paymentMethod,
+        ]);
+        
+        // Validate phone number - show error if empty (no separate modal needed)
+        if (empty(trim($this->stkPhoneNumber))) {
+            Log::info('Phone number is empty');
+            $this->dispatch('notify', message: 'Please enter a phone number', type: 'error');
             return;
         }
 
         // Validate phone number format
-        if (!validate_phone_number($this->mpesaPhoneNumber)) {
-            $this->dispatch('notify', message: 'Invalid phone number format. Use 07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX', type: 'error');
-            return;
-        }
-
-        // Close phone modal and proceed with payment
-        $this->showPhoneModal = false;
-        $this->processMpesaPayment();
-    }
-
-    public function processMpesaPayment()
-    {
-        // Validate phone number - show modal if empty
-        if (empty(trim($this->mpesaPhoneNumber))) {
-            $this->showPhoneModal = true;
-            return;
-        }
-
-        // Validate phone number format
-        if (!validate_phone_number($this->mpesaPhoneNumber)) {
+        if (!validate_phone_number($this->stkPhoneNumber)) {
             $this->dispatch('notify', message: 'Invalid phone number format. Use 07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX', type: 'error');
             return;
         }
@@ -643,16 +678,20 @@ class PosComponent extends Component
         }
 
         // Format phone number using helper
-        $phoneNumber = format_phone_number($this->mpesaPhoneNumber);
+        $phoneNumber = format_phone_number($this->stkPhoneNumber);
 
-        // Check if M-Pesa is enabled
+        // Determine payment method from user's selection (not settings)
+        $selectedPaymentMethod = strtolower(trim((string)($this->paymentMethod ?? 'mpesa')));
+        $isBankPaybill = $selectedPaymentMethod === 'bank_paybill';
+        
+        // Check if M-Pesa is enabled (required for both M-Pesa and Bank STK)
         if (!SettingsHelper::isMpesaEnabled()) {
             $this->dispatch('notify', message: 'M-Pesa payments are not enabled. Please configure in settings.', type: 'error');
             return;
         }
 
-        $this->mpesaProcessing = true;
-        $this->mpesaStatus = 'pending';
+        $this->stkProcessing = true;
+        $this->stkStatus = 'pending';
 
         try {
             DB::beginTransaction();
@@ -671,6 +710,10 @@ class PosComponent extends Component
             // Generate invoice number
             $invoiceNumber = 'SAL-POS-' . str_pad(Sale::max('id') + 1 ?? 1, 6, '0', STR_PAD_LEFT);
 
+            // Determine payment method and notes based on user's selection
+            $paymentMethod = $isBankPaybill ? 'bank_paybill' : 'mpesa';
+            $notes = $isBankPaybill ? 'POS Sale - Bank Paybill Payment Pending' : 'POS Sale - M-Pesa Payment Pending';
+            
             // Create sale with pending status
             $sale = Sale::create([
                 'pharmacy_id' => $pharmacy->id,
@@ -684,7 +727,7 @@ class PosComponent extends Component
                 'discount_amount' => $this->discountAmount,
                 'total_amount' => $this->cartTotal,
                 'status' => 'pending',
-                'notes' => 'POS Sale - M-Pesa Payment Pending',
+                'notes' => $notes,
             ]);
 
             // Create sale items and update stock
@@ -730,41 +773,77 @@ class PosComponent extends Component
                 throw new \Exception('Invalid payment amount: ' . $this->cartTotal);
             }
             
+            $paymentNotes = $isBankPaybill ? 'Bank Paybill STK Push - Pending' : 'M-Pesa STK Push - Pending';
+            $referencePrefix = $isBankPaybill ? 'BANK-PAYBILL-PENDING-' : 'MPESA-PENDING-';
+            
             $payment = Payment::create([
                 'sale_id' => $sale->id,
-                'payment_method' => 'mpesa',
+                'payment_method' => $paymentMethod,
                 'amount' => $paymentAmount,
-                'reference_number' => 'MPESA-PENDING-' . strtoupper(uniqid()),
-                'notes' => 'M-Pesa STK Push - Pending',
+                'reference_number' => $referencePrefix . strtoupper(uniqid()),
+                'notes' => $paymentNotes,
                 'status' => 'pending',
             ]);
 
             DB::commit();
 
-            // Initiate STK Push
-            $this->initiateSTKPush($sale->id, $phoneNumber, (float)$this->cartTotal, $invoiceNumber);
+            Log::info('Sale and payment created, initiating STK Push', [
+                'sale_id' => $sale->id,
+                'selected_payment_method' => $selectedPaymentMethod,
+                'is_bank_paybill' => $isBankPaybill,
+                'payment_method' => $paymentMethod,
+                'phone_number' => $phoneNumber,
+                'amount' => $this->cartTotal,
+            ]);
+
+            // Initiate STK Push based on user's payment method selection
+            if ($isBankPaybill) {
+                Log::info('Initiating Bank Paybill STK Push');
+                $this->initiateBankPaybillSTKPush($sale->id, $phoneNumber, (float)$this->cartTotal, $invoiceNumber);
+            } else {
+                Log::info('Initiating M-Pesa STK Push');
+                $this->initiateMpesaSTKPush($sale->id, $phoneNumber, (float)$this->cartTotal, $invoiceNumber);
+            }
 
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->mpesaProcessing = false;
-            $this->mpesaStatus = 'failed';
-            $this->dispatch('notify', message: 'Error initiating M-Pesa payment: ' . $e->getMessage(), type: 'error');
+            $this->stkProcessing = false;
+            $this->stkStatus = 'failed';
+            $this->dispatch('notify', message: 'Error initiating payment: ' . $e->getMessage(), type: 'error');
         }
     }
 
-    public function initiateSTKPush($saleId, $phoneNumber, $amount, $accountNumber)
+    public function initiateMpesaSTKPush($saleId, $phoneNumber, $amount, $accountNumber)
     {
         try {
+            // Explicitly set the callback URL to ensure it points to the correct endpoint
+            $callbackUrl = config('app.url') . '/api/v1/confirm';
+            
+            // M-Pesa requires integer amounts (no decimals)
+            $amount = (int) round((float) $amount);
+            
+            Log::info('Initiating M-Pesa STK Push', [
+                'saleId' => $saleId,
+                'phoneNumber' => $phoneNumber,
+                'amount' => $amount,
+                'callbackUrl' => $callbackUrl,
+            ]);
+            
             $response = Mpesa::stkpush(
                 phonenumber: $phoneNumber,
                 amount: $amount,
                 account_number: $accountNumber,
-                callbackurl: null, // Using callback URL from config file
+                callbackurl: $callbackUrl,
                 transactionType: Mpesa::PAYBILL
             );
 
             /** @var \Illuminate\Http\Client\Response $response */
             $result = $response->json();
+            
+            Log::info('M-Pesa STK Push response received', [
+                'status_code' => $response->status(),
+                'result' => $result,
+            ]);
 
             // Store the merchant and checkout request IDs
             if (isset($result['MerchantRequestID']) && isset($result['CheckoutRequestID'])) {
@@ -774,25 +853,229 @@ class PosComponent extends Component
                     'sale_id' => $saleId,
                 ]);
 
+                $this->pendingStkSaleId = $saleId;
+                $this->pendingStkCheckoutId = $result['CheckoutRequestID'];
+
                 if (isset($result['ResponseCode']) && $result['ResponseCode'] == '0') {
-                    $this->dispatch('notify', message: 'M-Pesa payment request sent. Please check your phone.', type: 'success');
+                    // Set status to pending so polling starts
+                    $this->stkStatus = 'pending';
+                    $this->dispatch('notify', message: 'Payment request sent. Please check your phone.', type: 'success');
                     // Keep modal open to wait for callback
                 } else {
-                    $this->mpesaProcessing = false;
-                    $this->mpesaStatus = 'failed';
-                    $errorMessage = $result['errorMessage'] ?? $result['CustomerMessage'] ?? 'Failed to initiate M-Pesa payment';
+                    $this->stkProcessing = false;
+                    $this->stkStatus = 'failed';
+                    $errorMessage = $result['errorMessage'] ?? $result['CustomerMessage'] ?? 'Failed to initiate payment';
                     $this->dispatch('notify', message: $errorMessage, type: 'error');
                 }
             } else {
-                $this->mpesaProcessing = false;
-                $this->mpesaStatus = 'failed';
-                $errorMessage = $result['errorMessage'] ?? $result['CustomerMessage'] ?? 'Failed to initiate M-Pesa payment';
+                $this->stkProcessing = false;
+                $this->stkStatus = 'failed';
+                $errorMessage = $result['errorMessage'] ?? $result['CustomerMessage'] ?? 'Failed to initiate payment';
+                Log::error('M-Pesa STK Push failed - missing required fields', [
+                    'result' => $result
+                ]);
                 $this->dispatch('notify', message: $errorMessage, type: 'error');
             }
         } catch (\Exception $e) {
-            $this->mpesaProcessing = false;
-            $this->mpesaStatus = 'failed';
+            Log::error('M-Pesa STK Push error: ' . $e->getMessage(), [
+                'saleId' => $saleId,
+                'phoneNumber' => $phoneNumber,
+                'amount' => $amount,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $this->stkProcessing = false;
+            $this->stkStatus = 'failed';
             $this->dispatch('notify', message: 'Error: ' . $e->getMessage(), type: 'error');
+        }
+    }
+
+    public function initiateBankPaybillSTKPush($saleId, $phoneNumber, $amount, $accountNumber)
+    {
+        try {
+            Log::info('initiateBankPaybillSTKPush called', [
+                'saleId' => $saleId,
+                'phoneNumber' => $phoneNumber,
+                'amount' => $amount,
+            ]);
+            
+            // Get bank configuration from settings
+            $bankCode = Setting::get('bank_code', 'kcb');
+            $bankAccountNumber = Setting::get('bank_account_number', '');
+            $accountReferenceType = Setting::get('account_reference_type', 'phone_number');
+            
+            // Determine account reference based on settings
+            $accountReference = $accountReferenceType === 'phone_number' ? $phoneNumber : $bankAccountNumber;
+            
+            // M-Pesa requires integer amounts (no decimals)
+            $amount = (int) round((float) $amount);
+            
+            $url = config('app.url') . '/api/bank-paybill/stk-push';
+            Log::info('Making HTTP request to Bank Paybill STK Push', [
+                'url' => $url,
+                'data' => [
+                    'amount' => $amount,
+                    'phonenumber' => $phoneNumber,
+                    'account_number' => $accountReference,
+                    'bank_code' => $bankCode,
+                    'sale_id' => $saleId,
+                ]
+            ]);
+            
+            $response = Http::post($url, [
+                'amount' => $amount,
+                'phonenumber' => $phoneNumber,
+                'account_number' => $accountReference,
+                'bank_code' => $bankCode,
+                'sale_id' => $saleId,
+            ]);
+
+            $result = $response->json();
+            
+            Log::info('Bank Paybill STK Push response received', [
+                'status_code' => $response->status(),
+                'result' => $result,
+            ]);
+
+            // Store the merchant and checkout request IDs
+            if (isset($result['checkout_request_id']) && isset($result['merchant_request_id'])) {
+                $this->pendingStkSaleId = $saleId;
+                $this->pendingStkCheckoutId = $result['checkout_request_id'];
+
+                // Check if status is '0' (success) - ResponseCode from M-Pesa API
+                $responseStatus = $result['status'] ?? $result['ResponseCode'] ?? null;
+                if ($responseStatus == '0' || $responseStatus === 0) {
+                    // Set status to pending so polling starts
+                    $this->stkStatus = 'pending';
+                    $this->dispatch('notify', message: 'Payment request sent. Please check your phone.', type: 'success');
+                    // Keep modal open to wait for callback
+                } else {
+                    $this->stkProcessing = false;
+                    $this->stkStatus = 'failed';
+                    $errorMessage = $result['message'] ?? $result['ResponseDescription'] ?? 'Failed to initiate payment';
+                    $this->dispatch('notify', message: $errorMessage, type: 'error');
+                }
+            } else {
+                $this->stkProcessing = false;
+                $this->stkStatus = 'failed';
+                $errorMessage = $result['message'] ?? $result['ResponseDescription'] ?? 'Failed to initiate payment';
+                Log::error('Bank Paybill STK Push failed - missing checkout_request_id or merchant_request_id', [
+                    'result' => $result
+                ]);
+                $this->dispatch('notify', message: $errorMessage, type: 'error');
+            }
+        } catch (\Exception $e) {
+            $this->stkProcessing = false;
+            $this->stkStatus = 'failed';
+            $this->dispatch('notify', message: 'Error: ' . $e->getMessage(), type: 'error');
+        }
+    }
+
+    public function checkSTKPaymentStatus()
+    {
+        if (!$this->pendingStkSaleId || $this->stkStatus !== 'pending') {
+            return;
+        }
+
+        Log::info('Checking STK payment status', [
+            'pendingStkSaleId' => $this->pendingStkSaleId,
+            'paymentMethod' => $this->paymentMethod,
+        ]);
+
+        // Check based on the actual payment method used, not settings
+        $selectedPaymentMethod = strtolower(trim((string)($this->paymentMethod ?? 'mpesa')));
+        $isBankPaybill = $selectedPaymentMethod === 'bank_paybill';
+        
+        if ($isBankPaybill) {
+            // Check bank paybill status
+            if (!$this->pendingStkCheckoutId) {
+                return;
+            }
+            
+            try {
+                $response = Http::get(config('app.url') . '/api/bank-paybill/status/' . $this->pendingStkCheckoutId);
+                $result = $response->json();
+
+                if (isset($result['status'])) {
+                    if ($result['status'] === 'success') {
+                        $this->stkStatus = 'success';
+                        $this->stkProcessing = false;
+                        
+                        // Find and update the transaction
+                        $stkPush = BankPaybillStk::where('sale_id', $this->pendingStkSaleId)->first();
+                        if ($stkPush && $stkPush->status === 'Completed') {
+                            $this->handlePaymentSuccess('bank_paybill');
+                        }
+                    } elseif ($result['status'] === 'failed') {
+                        $this->stkStatus = 'failed';
+                        $this->stkProcessing = false;
+                        $this->pendingStkSaleId = null;
+                        $this->pendingStkCheckoutId = null;
+                        $this->dispatch('notify', message: 'Payment failed: ' . ($result['message'] ?? 'Unknown error'), type: 'error');
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('Error checking Bank Paybill payment status: ' . $e->getMessage());
+            }
+        } else {
+            // Check M-Pesa status (also handle bank_paybill if not explicitly bank)
+            $payment = Payment::where('sale_id', $this->pendingStkSaleId)
+                ->whereIn('payment_method', ['mpesa', 'bank_paybill'])
+                ->where('status', 'completed')
+                ->first();
+
+            if ($payment) {
+                $this->handlePaymentSuccess('mpesa', $payment);
+            } else {
+                // Check if payment failed
+                $stkPush = MpesaSTK::where('sale_id', $this->pendingStkSaleId)
+                    ->whereNotNull('result_code')
+                    ->where('result_code', '!=', '0')
+                    ->first();
+
+                if ($stkPush) {
+                    $this->stkStatus = 'failed';
+                    $this->stkProcessing = false;
+                    $this->pendingStkSaleId = null;
+                    $this->dispatch('notify', message: 'Payment failed: ' . ($stkPush->result_desc ?? 'Unknown error'), type: 'error');
+                }
+            }
+        }
+    }
+    
+    private function handlePaymentSuccess($paymentMethod, $payment = null)
+    {
+        if (!$payment) {
+            $payment = Payment::where('sale_id', $this->pendingStkSaleId)
+                ->where('payment_method', $paymentMethod)
+                ->where('status', 'completed')
+                ->first();
+        }
+        
+        if ($payment) {
+            $this->stkStatus = 'success';
+            $this->stkProcessing = false;
+            
+            // Load sale data for receipt
+            $sale = Sale::with(['items.medicine', 'customer', 'payments'])->find($payment->sale_id);
+            if ($sale) {
+                $this->lastSale = $sale;
+                $this->lastSaleItems = $sale->items;
+                $this->lastCustomer = $sale->customer;
+                $this->lastPayment = $payment;
+                
+                // Close payment modal and show receipt
+                $this->showPaymentModal = false;
+                $this->showReceiptModal = true;
+                
+                // Reset cart
+                $this->resetCart();
+                
+                $this->dispatch('notify', message: 'Payment completed successfully!', type: 'success');
+            }
+            
+            $this->pendingStkSaleId = null;
+            $this->pendingStkCheckoutId = null;
         }
     }
 
@@ -807,10 +1090,11 @@ class PosComponent extends Component
         $this->discountType = 'fixed';
         $this->amountPaid = 0;
         $this->change = 0;
-        $this->mpesaPhoneNumber = '';
-        $this->mpesaProcessing = false;
-        $this->mpesaStatus = null;
-        $this->showPhoneModal = false;
+        $this->stkPhoneNumber = '';
+        $this->stkProcessing = false;
+        $this->stkStatus = null;
+        $this->pendingStkSaleId = null;
+        $this->pendingStkCheckoutId = null;
         $this->search = '';
         $this->searchResults = [];
         $this->showSearchResults = false;
