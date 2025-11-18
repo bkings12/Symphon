@@ -102,7 +102,6 @@ class SettingsHelper
         return [
             'bank_code' => Setting::get('bank_code', 'kcb'),
             'bank_account_number' => Setting::get('bank_account_number', ''),
-            'account_reference_type' => Setting::get('account_reference_type', 'phone_number'),
         ];
     }
 
@@ -112,6 +111,28 @@ class SettingsHelper
     public static function formatCurrency(float $amount): string
     {
         return self::currencySymbol() . ' ' . number_format($amount, 2);
+    }
+
+    /**
+     * Check if SMS notifications are enabled
+     */
+    public static function isSmsEnabled(): bool
+    {
+        return filter_var(Setting::get('sms_enabled', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * Get SMS configuration
+     */
+    public static function smsConfig(): array
+    {
+        return [
+            'enabled' => self::isSmsEnabled(),
+            'provider' => Setting::get('sms_provider', 'blessed_text'),
+            'api_key' => Setting::get('sms_api_key', ''),
+            'sender_id' => Setting::get('sms_sender_id', ''),
+            'notification_phone' => Setting::get('sms_notification_phone', ''),
+        ];
     }
 }
 

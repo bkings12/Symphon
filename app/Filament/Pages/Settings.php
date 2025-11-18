@@ -50,7 +50,14 @@ class Settings extends Page implements HasForms
     public $payment_type; // 'mpesa' or 'bank_stk'
     public $bank_code;
     public $bank_account_number;
-    public $account_reference_type; // 'bank_account' or 'phone_number'
+    // Removed: account_reference_type - now always uses bank_account_number from settings
+    
+    // SMS Settings
+    public $sms_enabled;
+    public $sms_provider;
+    public $sms_api_key;
+    public $sms_sender_id;
+    public $sms_notification_phone;
 
     public function mount(): void
     {
@@ -75,7 +82,15 @@ class Settings extends Page implements HasForms
         $this->payment_type = Setting::get('payment_type', 'mpesa');
         $this->bank_code = Setting::get('bank_code', 'kcb');
         $this->bank_account_number = Setting::get('bank_account_number', '');
-        $this->account_reference_type = Setting::get('account_reference_type', 'phone_number');
+        // Removed: account_reference_type - now always uses bank_account_number from settings
+        
+        // Load SMS Settings
+        $smsEnabledValue = Setting::get('sms_enabled', false);
+        $this->sms_enabled = filter_var($smsEnabledValue, FILTER_VALIDATE_BOOLEAN);
+        $this->sms_provider = Setting::get('sms_provider', 'blessed_text');
+        $this->sms_api_key = Setting::get('sms_api_key', '');
+        $this->sms_sender_id = Setting::get('sms_sender_id', '');
+        $this->sms_notification_phone = Setting::get('sms_notification_phone', '');
     }
 
     public function form(Schema $schema): Schema
@@ -217,22 +232,11 @@ class Settings extends Page implements HasForms
                                             ->columnSpanFull(),
                                         
                                         TextInput::make('bank_account_number')
-                                            ->label('Bank Account Number / Phone Number')
-                                            ->placeholder('Enter account number or phone number')
+                                            ->label('Business Account Number / Phone Number')
+                                            ->placeholder('Enter your business account number or phone number')
                                             ->maxLength(255)
                                             ->required()
-                                            ->helperText('This will be used as the account reference for payments')
-                                            ->columnSpanFull(),
-                                        
-                                        Select::make('account_reference_type')
-                                            ->label('Account Reference Type')
-                                            ->options([
-                                                'phone_number' => 'Phone Number',
-                                                'bank_account' => 'Bank Account Number',
-                                            ])
-                                            ->default('phone_number')
-                                            ->required()
-                                            ->helperText('Choose whether to use phone number or bank account as reference')
+                                            ->helperText('⚠️ IMPORTANT: This is where customer payments will be credited. Enter your business account number or phone number here.')
                                             ->columnSpanFull(),
                                     ]),
 
@@ -297,6 +301,91 @@ class Settings extends Page implements HasForms
                                     ->collapsed()
                                     ->icon('heroicon-o-information-circle'),
                             ]),
+
+                        Tabs\Tab::make('SMS Settings')
+                            ->icon('heroicon-o-chat-bubble-left-right')
+                            ->schema([
+                                Section::make('SMS Provider Configuration')
+                                    ->description('Configure SMS provider for sending notifications')
+                                    ->icon('heroicon-o-envelope')
+                                    ->schema([
+                                        Toggle::make('sms_enabled')
+                                            ->label('Enable SMS Notifications')
+                                            ->default(false)
+                                            ->helperText('Turn on to enable SMS notifications for low stock alerts')
+                                            ->columnSpanFull(),
+                                        
+                                        Select::make('sms_provider')
+                                            ->label('SMS Provider')
+                                            ->options([
+                                                'blessed_text' => 'Blessed Text',
+                                            ])
+                                            ->default('blessed_text')
+                                            ->required()
+                                            ->disabled(fn ($get) => !$get('sms_enabled'))
+                                            ->helperText('Select your SMS service provider')
+                                            ->columnSpanFull(),
+                                    ]),
+
+                                Section::make('Blessed Text Configuration')
+                                    ->description('Configure Blessed Text SMS API credentials')
+                                    ->icon('heroicon-o-key')
+                                    ->visible(fn ($get) => $get('sms_provider') === 'blessed_text')
+                                    ->schema([
+                                        TextInput::make('sms_api_key')
+                                            ->label('API Key')
+                                            ->placeholder('Enter your Blessed Text API key')
+                                            ->password()
+                                            ->revealable()
+                                            ->maxLength(255)
+                                            ->required(fn ($get) => $get('sms_enabled'))
+                                            ->disabled(fn ($get) => !$get('sms_enabled'))
+                                            ->helperText('Get your API key from your Blessed Text profile')
+                                            ->columnSpanFull(),
+                                        
+                                        TextInput::make('sms_sender_id')
+                                            ->label('Sender ID')
+                                            ->placeholder('e.g., 23107')
+                                            ->maxLength(20)
+                                            ->required(fn ($get) => $get('sms_enabled'))
+                                            ->disabled(fn ($get) => !$get('sms_enabled'))
+                                            ->helperText('This must be a sender ID already assigned to you')
+                                            ->columnSpanFull(),
+                                    ]),
+
+                                Section::make('Notification Settings')
+                                    ->description('Configure where to send low stock notifications')
+                                    ->icon('heroicon-o-bell')
+                                    ->schema([
+                                        TextInput::make('sms_notification_phone')
+                                            ->label('Notification Phone Number')
+                                            ->placeholder('e.g., 254721XXXXXX or 0721XXXXXX')
+                                            ->maxLength(20)
+                                            ->required(fn ($get) => $get('sms_enabled'))
+                                            ->disabled(fn ($get) => !$get('sms_enabled'))
+                                            ->helperText('Phone number to receive low stock alerts. Can be in format: 254721XXXXXX, 0721XXXXXX, or 721XXXXXX')
+                                            ->columnSpanFull(),
+                                    ]),
+
+                                Section::make('Important Information')
+                                    ->schema([
+                                        Placeholder::make('info')
+                                            ->content('To obtain Blessed Text credentials:
+                                            
+1. Visit the Blessed Text website (https://blessedtexts.com)
+2. Create an account or log in
+3. Go to your Profile to get your API Key
+4. Request a Sender ID from Blessed Text support
+5. Enter your notification phone number to receive low stock alerts
+
+**Low Stock Alerts:** When enabled, you will receive SMS notifications when any medicine stock falls below the threshold set in General Settings.
+
+**Security Note:** Keep your API credentials secure and never share them.')
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->collapsed()
+                                    ->icon('heroicon-o-information-circle'),
+                            ]),
                     ])
                     ->columnSpanFull()
                     ->persistTabInQueryString()
@@ -331,7 +420,15 @@ class Settings extends Page implements HasForms
             // Save Bank Paybill Settings
             Setting::set('bank_code', $this->bank_code ?? 'kcb', 'bank_paybill');
             Setting::set('bank_account_number', $this->bank_account_number ?? '', 'bank_paybill');
-            Setting::set('account_reference_type', $this->account_reference_type ?? 'phone_number', 'bank_paybill');
+            // Removed: account_reference_type - now always uses bank_account_number from settings
+            
+            // Save SMS Settings
+            $smsEnabled = filter_var($this->sms_enabled ?? false, FILTER_VALIDATE_BOOLEAN);
+            Setting::set('sms_enabled', $smsEnabled ? '1' : '0', 'sms');
+            Setting::set('sms_provider', $this->sms_provider ?? 'blessed_text', 'sms');
+            Setting::set('sms_api_key', $this->sms_api_key ?? '', 'sms');
+            Setting::set('sms_sender_id', $this->sms_sender_id ?? '', 'sms');
+            Setting::set('sms_notification_phone', $this->sms_notification_phone ?? '', 'sms');
 
             // Clear cache
             Setting::clearCache();

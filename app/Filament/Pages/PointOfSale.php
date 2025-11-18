@@ -782,10 +782,10 @@ class PointOfSale extends Page
             // Get bank configuration from settings
             $bankCode = \App\Models\Setting::get('bank_code', 'kcb');
             $bankAccountNumber = \App\Models\Setting::get('bank_account_number', '');
-            $accountReferenceType = \App\Models\Setting::get('account_reference_type', 'phone_number');
             
-            // Determine account reference based on settings
-            $accountReference = $accountReferenceType === 'phone_number' ? $phoneNumber : $bankAccountNumber;
+            // Always use the business account from settings as the account reference
+            // The $phoneNumber is only for sending the STK push to the customer's phone
+            $accountReference = $bankAccountNumber;
             
             $url = config('app.url') . '/api/bank-paybill/stk-push';
             

@@ -902,10 +902,10 @@ class PosComponent extends Component
             // Get bank configuration from settings
             $bankCode = Setting::get('bank_code', 'kcb');
             $bankAccountNumber = Setting::get('bank_account_number', '');
-            $accountReferenceType = Setting::get('account_reference_type', 'phone_number');
             
-            // Determine account reference based on settings
-            $accountReference = $accountReferenceType === 'phone_number' ? $phoneNumber : $bankAccountNumber;
+            // Always use the business account from settings as the account reference
+            // The $phoneNumber is only for sending the STK push to the customer's phone
+            $accountReference = $bankAccountNumber;
             
             // M-Pesa requires integer amounts (no decimals)
             $amount = (int) round((float) $amount);
