@@ -1,6 +1,6 @@
 @props(['sale', 'saleItems', 'customer', 'payment'])
 
-<div class="receipt-container" style="max-width: 400px; margin: 0 auto; font-family: 'Courier New', monospace; background: white; padding: 2rem; border-radius: 0.5rem; color: #000 !important;">
+<div class="receipt-container" style="max-width: 80mm; margin: 0 auto; font-family: 'Courier New', monospace; background: white; padding: 1rem; border-radius: 0.5rem; color: #000 !important;">
     <!-- Header -->
     <div style="text-align: center; margin-bottom: 1.5rem; border-bottom: 2px dashed #333; padding-bottom: 1rem; color: #000 !important;">
         <h2 style="margin: 0; font-size: 1.5rem; font-weight: bold; color: #000 !important;">{{ auth()->user()->pharmacy?->name ?? 'Symphony Pharmacy' }}</h2>
@@ -165,14 +165,14 @@
 
 <style>
     @media print {
-        /* Reset page layout - smaller margins to fit receipt */
+        /* Reset page layout for thermal printer (80mm width) */
         @page {
-            size: A4 portrait;
-            margin: 10mm auto;
+            size: 80mm auto;
+            margin: 0;
         }
         
         html, body {
-            width: 100%;
+            width: 80mm;
             height: auto;
             margin: 0;
             padding: 0;
@@ -198,16 +198,20 @@
             transform: none !important;
             width: 80mm !important;
             max-width: 80mm !important;
-            margin: 0 auto !important;
-            padding: 1rem !important;
+            min-width: 80mm !important;
+            margin: 0 !important;
+            padding: 5mm !important;
             background: white !important;
             page-break-after: avoid !important;
             page-break-inside: avoid !important;
             box-shadow: none !important;
             border: none !important;
+            border-radius: 0 !important;
             height: auto !important;
             min-height: auto !important;
             max-height: none !important;
+            font-size: 11pt !important;
+            line-height: 1.3 !important;
         }
         
         /* Ensure all receipt content is visible and has proper colors */
