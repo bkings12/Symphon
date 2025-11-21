@@ -20,6 +20,7 @@ class PharmacySeeder extends Seeder
                 'phone' => '+1-555-0101',
                 'email' => 'main@pharmacy.com',
                 'license_number' => 'PH-LIC-2024-001',
+                'tax_id' => 'P051234567A',
                 'is_active' => true,
             ],
             [
@@ -29,6 +30,7 @@ class PharmacySeeder extends Seeder
                 'phone' => '+1-555-0102',
                 'email' => 'downtown@pharmacy.com',
                 'license_number' => 'PH-LIC-2024-002',
+                'tax_id' => 'P051234568B',
                 'is_active' => true,
             ],
         ];

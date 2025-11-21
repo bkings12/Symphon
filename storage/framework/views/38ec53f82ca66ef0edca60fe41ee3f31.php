@@ -1057,11 +1057,12 @@
                     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                         <div>
                             <label class="pos-label">Payment Method</label>
-                            <select wire:model.live="paymentMethod" class="pos-select" style="font-size: 1.0625rem;">
+                            <select wire:model.live="paymentMethod" wire:change="$refresh" class="pos-select" style="font-size: 1.0625rem;">
                                 <option value="cash">💵 Cash</option>
                                 <option value="mpesa">📱 M-Pesa</option>
-                               
+                                <option value="bank_paybill">🏦 Bank Paybill</option>
                             </select>
+                            <input type="hidden" wire:model="paymentMethod" />
                         </div>
 
                         <div class="pos-modal-info-box">
@@ -1071,12 +1072,12 @@
                             </div>
                         </div>
 
-                        <!--[if BLOCK]><![endif]--><?php if($paymentMethod === 'mpesa'): ?>
+                        <!--[if BLOCK]><![endif]--><?php if($paymentMethod === 'mpesa' || $paymentMethod === 'bank_paybill'): ?>
                             <div>
-                                <label class="pos-label">M-Pesa Phone Number <span style="color: red;">*</span></label>
+                                <label class="pos-label">Phone Number <span style="color: red;">*</span></label>
                                 <input 
                                     type="tel" 
-                                    wire:model.live="mpesaPhoneNumber"
+                                    wire:model.live="stkPhoneNumber"
                                     placeholder="07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX"
                                     class="pos-input"
                                     style="font-size: 1.25rem; font-weight: 600; padding: 1rem;"
@@ -1086,14 +1087,14 @@
                                     <!--[if BLOCK]><![endif]--><?php if($selectedCustomer && $selectedCustomer['phone']): ?>
                                         Customer phone: <?php echo e($selectedCustomer['phone']); ?> (you can change it)
                                     <?php else: ?>
-                                        Enter the M-Pesa registered phone number
+                                        Enter the phone number for STK Push payment
                                     <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
                                 </p>
                             </div>
 
-                            <!--[if BLOCK]><![endif]--><?php if(isset($mpesaStatus) && $mpesaStatus === 'pending'): ?>
+                            <!--[if BLOCK]><![endif]--><?php if(isset($stkStatus) && $stkStatus === 'pending'): ?>
                                 <div 
-                                    wire:poll.3s="checkMpesaPaymentStatus"
+                                    wire:poll.3s="checkSTKPaymentStatus"
                                     style="background: var(--info-light); border: 2px solid var(--info); border-radius: 0.75rem; padding: 1.25rem; text-align: center;">
                                     <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                                         <svg class="animate-spin" style="width: 1.5rem; height: 1.5rem; color: var(--info);" fill="none" viewBox="0 0 24 24">
@@ -1108,7 +1109,7 @@
                                 </div>
                             <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
 
-                            <?php if(isset($mpesaStatus) && $mpesaStatus === 'success'): ?>
+                            <?php if(isset($stkStatus) && $stkStatus === 'success'): ?>
                                 <div style="background: var(--success-light); border: 2px solid var(--success); border-radius: 0.75rem; padding: 1.25rem; text-align: center;">
                                     <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                                         <svg style="width: 1.5rem; height: 1.5rem; color: var(--success);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1117,12 +1118,12 @@
                                         <span style="color: var(--success-dark); font-weight: 700; font-size: 1rem;">Payment Successful!</span>
                                     </div>
                                     <p style="color: var(--gray-600); font-size: 0.875rem;">
-                                        M-Pesa payment has been completed successfully.
+                                        Payment has been completed successfully.
                                     </p>
                                 </div>
                             <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
 
-                            <?php if(isset($mpesaStatus) && $mpesaStatus === 'failed'): ?>
+                            <?php if(isset($stkStatus) && $stkStatus === 'failed'): ?>
                                 <div style="background: var(--danger-light); border: 2px solid var(--danger); border-radius: 0.75rem; padding: 1.25rem; text-align: center;">
                                     <span style="color: var(--danger-dark); font-weight: 700; font-size: 1rem;">Payment Failed</span>
                                     <p style="color: var(--gray-600); font-size: 0.875rem; margin-top: 0.5rem;">
@@ -1157,7 +1158,7 @@
                             <button 
                                 wire:click="closePaymentModal"
                                 class="pos-modal-button pos-modal-button-cancel"
-                                <?php if(isset($mpesaStatus) && $mpesaStatus === 'pending'): ?> disabled <?php endif; ?>>
+                                <?php if(isset($stkStatus) && $stkStatus === 'pending'): ?> disabled <?php endif; ?>>
                                 Cancel
                             </button>
                             <button 
@@ -1165,14 +1166,13 @@
                                 wire:loading.attr="disabled"
                                 wire:target="processSale"
                                 class="pos-modal-button pos-modal-button-submit"
-                                <?php if(isset($mpesaStatus) && $mpesaStatus === 'pending'): ?> disabled <?php endif; ?>
-                                <?php if($paymentMethod === 'mpesa' && empty($mpesaPhoneNumber)): ?> disabled <?php endif; ?>>
-                                <!--[if BLOCK]><![endif]--><?php if($paymentMethod === 'mpesa'): ?>
+                                <?php if(isset($stkStatus) && $stkStatus === 'pending'): ?> disabled <?php endif; ?>>
+                                <!--[if BLOCK]><![endif]--><?php if($paymentMethod === 'mpesa' || $paymentMethod === 'bank_paybill'): ?>
                                     <span wire:loading.remove wire:target="processSale">
-                                        <!--[if BLOCK]><![endif]--><?php if(isset($mpesaStatus) && $mpesaStatus === 'pending'): ?>
+                                        <!--[if BLOCK]><![endif]--><?php if(isset($stkStatus) && $stkStatus === 'pending'): ?>
                                             ⏳ Processing...
                                         <?php else: ?>
-                                            📱 Pay with M-Pesa
+                                            📱 Pay with STK Push
                                         <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
                                     </span>
                                     <span wire:loading wire:target="processSale">Processing...</span>
@@ -1188,64 +1188,6 @@
         </div>
     <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
 
-    <!-- M-Pesa Phone Number Modal -->
-    <!--[if BLOCK]><![endif]--><?php if(isset($showPhoneModal)): ?>
-        <!--[if BLOCK]><![endif]--><?php if($showPhoneModal): ?>
-        <div class="pos-modal-overlay" wire:click.self="closePhoneModal" style="z-index: 50;">
-            <div class="pos-modal-content" style="max-width: 450px;">
-                <div class="pos-modal-inner">
-                    <h2 class="pos-modal-title">📱 Enter M-Pesa Phone Number</h2>
-                    
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div class="pos-modal-info-box">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="color: var(--gray-600); font-weight: 600; font-size: 1rem;">Total Amount</span>
-                                <span style="font-size: 1.5rem; font-weight: 800; color: var(--gray-900);"><?php echo e(format_currency($cartTotal)); ?></span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="pos-label">M-Pesa Phone Number <span style="color: red;">*</span></label>
-                            <input 
-                                type="tel" 
-                                wire:model.live="mpesaPhoneNumber"
-                                placeholder="07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX"
-                                class="pos-input"
-                                style="font-size: 1.25rem; font-weight: 600; padding: 1rem;"
-                                required
-                                autofocus
-                                wire:keydown.enter="submitPhoneNumber">
-                            <p style="color: var(--gray-500); font-size: 0.875rem; margin-top: 0.5rem;">
-                                <!--[if BLOCK]><![endif]--><?php if($selectedCustomer && $selectedCustomer['phone']): ?>
-                                    Customer phone: <?php echo e($selectedCustomer['phone']); ?> (you can change it)
-                                <?php else: ?>
-                                    Enter the M-Pesa registered phone number
-                                <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
-                            </p>
-                        </div>
-
-                        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                            <button 
-                                wire:click="closePhoneModal"
-                                class="pos-modal-button pos-modal-button-cancel">
-                                Cancel
-                            </button>
-                            <button 
-                                wire:click="submitPhoneNumber"
-                                wire:loading.attr="disabled"
-                                wire:target="submitPhoneNumber"
-                                class="pos-modal-button pos-modal-button-submit"
-                                <?php if(empty($mpesaPhoneNumber)): ?> disabled <?php endif; ?>>
-                                <span wire:loading.remove wire:target="submitPhoneNumber">📱 Continue with M-Pesa</span>
-                                <span wire:loading wire:target="submitPhoneNumber">Processing...</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
-    <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
 
     <!-- Receipt Modal -->
     <!--[if BLOCK]><![endif]--><?php if(isset($showReceiptModal)): ?>
@@ -1295,11 +1237,16 @@
                     <!-- Action Buttons - Fixed at bottom -->
                     <div class="pos-modal-actions" style="display: flex; gap: 1rem;">
                         <button 
-                            wire:click="printReceipt"
-                            style="flex: 1; padding: 1rem 1.5rem; background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%); color: white; border: none; border-radius: 0.75rem; font-weight: 700; cursor: pointer; font-size: 1rem; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);"
-                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(99, 102, 241, 0.4)';"
-                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(99, 102, 241, 0.3)';">
-                            🖨️ Print Receipt
+                            <?php if($lastSale && $lastSale->id): ?>
+                                onclick="printThermal(<?php echo e($lastSale->id); ?>, this)"
+                            <?php else: ?>
+                                disabled
+                            <?php endif; ?>
+                            id="thermal-print-btn"
+                            style="flex: 1; padding: 1rem 1.5rem; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 0.75rem; font-weight: 700; cursor: pointer; font-size: 1rem; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);"
+                            onmouseover="if(!this.disabled) { this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(16, 185, 129, 0.4)'; }"
+                            onmouseout="if(!this.disabled) { this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(16, 185, 129, 0.3)'; }">
+                            🎫 Print Receipt
                         </button>
                         <button 
                             wire:click="closeReceipt"
@@ -1332,6 +1279,100 @@
 
 <?php $__env->startPush('scripts'); ?>
 <script>
+    // Thermal printer function - define globally before Livewire init
+    window.printThermal = async function(saleId, buttonElement) {
+        console.log('printThermal called with saleId:', saleId);
+        
+        if (!saleId || saleId === 0) {
+            console.error('Invalid saleId:', saleId);
+            window.dispatchEvent(new CustomEvent('notify', {
+                detail: { message: 'No sale selected for printing', type: 'error' }
+            }));
+            return;
+        }
+
+        try {
+            // Get CSRF token
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                             document.querySelector('input[name="_token"]')?.value;
+            
+            if (!csrfToken) {
+                throw new Error('CSRF token not found');
+            }
+
+            // Show loading state
+            const button = buttonElement || document.getElementById('thermal-print-btn') || document.querySelector('button[onclick*="printThermal"]');
+            const originalText = button ? button.textContent : '';
+            if (button) {
+                button.disabled = true;
+                button.textContent = '🔄 Printing...';
+            }
+
+            const response = await fetch(`/thermal-print/${saleId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Show success notification
+                window.dispatchEvent(new CustomEvent('notify', {
+                    detail: { message: 'Receipt sent to thermal printer!', type: 'success' }
+                }));
+            } else {
+                // Log full error details to console
+                console.error('Print failed:', data);
+                
+                // Show detailed error in alert (more visible than notification)
+                let errorMsg = 'Print Error:\n\n';
+                errorMsg += 'Message: ' + (data.message || 'Unknown error') + '\n';
+                if (data.error_type) errorMsg += 'Type: ' + data.error_type + '\n';
+                if (data.file) errorMsg += 'File: ' + data.file + '\n';
+                if (data.line) errorMsg += 'Line: ' + data.line + '\n';
+                if (data.config) {
+                    errorMsg += '\nConfig:\n';
+                    errorMsg += 'Type: ' + data.config.type + '\n';
+                    errorMsg += 'Destination: ' + data.config.destination + '\n';
+                }
+                
+                alert(errorMsg);
+                
+                // Also show notification
+                window.dispatchEvent(new CustomEvent('notify', {
+                    detail: { message: 'Print failed - check console', type: 'error' }
+                }));
+            }
+        } catch (error) {
+            console.error('Thermal print error:', error);
+            alert('Print Error:\n\n' + error.message);
+            window.dispatchEvent(new CustomEvent('notify', {
+                detail: { message: 'Failed to print: ' + (error.message || 'Unknown error'), type: 'error' }
+            }));
+        } finally {
+            // Reset button state
+            const button = buttonElement || document.getElementById('thermal-print-btn') || document.querySelector('button[onclick*="printThermal"]');
+            if (button) {
+                button.disabled = false;
+                button.textContent = '🎫 Print (Thermal)';
+            }
+        }
+    };
+
+    // Also make it available as a global function
+    function printThermal(saleId, buttonElement) {
+        return window.printThermal(saleId, buttonElement);
+    }
+
     document.addEventListener('livewire:init', () => {
         Livewire.on('focus-search', () => {
             document.getElementById('search-input')?.focus();

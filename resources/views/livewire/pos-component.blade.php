@@ -1220,11 +1220,16 @@
                     <!-- Action Buttons - Fixed at bottom -->
                     <div class="pos-modal-actions" style="display: flex; gap: 1rem;">
                         <button 
-                            wire:click="printReceipt"
-                            style="flex: 1; padding: 1rem 1.5rem; background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%); color: white; border: none; border-radius: 0.75rem; font-weight: 700; cursor: pointer; font-size: 1rem; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);"
-                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(99, 102, 241, 0.4)';"
-                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(99, 102, 241, 0.3)';">
-                            🖨️ Print Receipt
+                            @if($lastSale && $lastSale->id)
+                                onclick="printThermal({{ $lastSale->id }}, this)"
+                            @else
+                                disabled
+                            @endif
+                            id="thermal-print-btn"
+                            style="flex: 1; padding: 1rem 1.5rem; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 0.75rem; font-weight: 700; cursor: pointer; font-size: 1rem; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);"
+                            onmouseover="if(!this.disabled) { this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(16, 185, 129, 0.4)'; }"
+                            onmouseout="if(!this.disabled) { this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(16, 185, 129, 0.3)'; }">
+                            🎫 Print Receipt
                         </button>
                         <button 
                             wire:click="closeReceipt"
@@ -1257,6 +1262,100 @@
 
 @push('scripts')
 <script>
+    // Thermal printer function - define globally before Livewire init
+    window.printThermal = async function(saleId, buttonElement) {
+        console.log('printThermal called with saleId:', saleId);
+        
+        if (!saleId || saleId === 0) {
+            console.error('Invalid saleId:', saleId);
+            window.dispatchEvent(new CustomEvent('notify', {
+                detail: { message: 'No sale selected for printing', type: 'error' }
+            }));
+            return;
+        }
+
+        try {
+            // Get CSRF token
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                             document.querySelector('input[name="_token"]')?.value;
+            
+            if (!csrfToken) {
+                throw new Error('CSRF token not found');
+            }
+
+            // Show loading state
+            const button = buttonElement || document.getElementById('thermal-print-btn') || document.querySelector('button[onclick*="printThermal"]');
+            const originalText = button ? button.textContent : '';
+            if (button) {
+                button.disabled = true;
+                button.textContent = '🔄 Printing...';
+            }
+
+            const response = await fetch(`/thermal-print/${saleId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Show success notification
+                window.dispatchEvent(new CustomEvent('notify', {
+                    detail: { message: 'Receipt sent to thermal printer!', type: 'success' }
+                }));
+            } else {
+                // Log full error details to console
+                console.error('Print failed:', data);
+                
+                // Show detailed error in alert (more visible than notification)
+                let errorMsg = 'Print Error:\n\n';
+                errorMsg += 'Message: ' + (data.message || 'Unknown error') + '\n';
+                if (data.error_type) errorMsg += 'Type: ' + data.error_type + '\n';
+                if (data.file) errorMsg += 'File: ' + data.file + '\n';
+                if (data.line) errorMsg += 'Line: ' + data.line + '\n';
+                if (data.config) {
+                    errorMsg += '\nConfig:\n';
+                    errorMsg += 'Type: ' + data.config.type + '\n';
+                    errorMsg += 'Destination: ' + data.config.destination + '\n';
+                }
+                
+                alert(errorMsg);
+                
+                // Also show notification
+                window.dispatchEvent(new CustomEvent('notify', {
+                    detail: { message: 'Print failed - check console', type: 'error' }
+                }));
+            }
+        } catch (error) {
+            console.error('Thermal print error:', error);
+            alert('Print Error:\n\n' + error.message);
+            window.dispatchEvent(new CustomEvent('notify', {
+                detail: { message: 'Failed to print: ' + (error.message || 'Unknown error'), type: 'error' }
+            }));
+        } finally {
+            // Reset button state
+            const button = buttonElement || document.getElementById('thermal-print-btn') || document.querySelector('button[onclick*="printThermal"]');
+            if (button) {
+                button.disabled = false;
+                button.textContent = '🎫 Print (Thermal)';
+            }
+        }
+    };
+
+    // Also make it available as a global function
+    function printThermal(saleId, buttonElement) {
+        return window.printThermal(saleId, buttonElement);
+    }
+
     document.addEventListener('livewire:init', () => {
         Livewire.on('focus-search', () => {
             document.getElementById('search-input')?.focus();

@@ -58,6 +58,14 @@ class Settings extends Page implements HasForms
     public $sms_api_key;
     public $sms_sender_id;
     public $sms_notification_phone;
+    
+    // Pharmacy Information
+    public $pharmacy_name;
+    public $pharmacy_phone;
+    public $pharmacy_email;
+    public $pharmacy_address;
+    public $pharmacy_tax_id;
+    public $pharmacy_website;
 
     public function mount(): void
     {
@@ -91,6 +99,14 @@ class Settings extends Page implements HasForms
         $this->sms_api_key = Setting::get('sms_api_key', '');
         $this->sms_sender_id = Setting::get('sms_sender_id', '');
         $this->sms_notification_phone = Setting::get('sms_notification_phone', '');
+        
+        // Load Pharmacy Information
+        $this->pharmacy_name = Setting::get('pharmacy_name', 'Symphony Pharmacy');
+        $this->pharmacy_phone = Setting::get('pharmacy_phone', '');
+        $this->pharmacy_email = Setting::get('pharmacy_email', '');
+        $this->pharmacy_address = Setting::get('pharmacy_address', '');
+        $this->pharmacy_tax_id = Setting::get('pharmacy_tax_id', '');
+        $this->pharmacy_website = Setting::get('pharmacy_website', '');
     }
 
     public function form(Schema $schema): Schema
@@ -99,6 +115,78 @@ class Settings extends Page implements HasForms
             ->components([
                 Tabs::make('Settings')
                     ->tabs([
+                        Tabs\Tab::make('Pharmacy Information')
+                            ->icon('heroicon-o-building-storefront')
+                            ->schema([
+                                Section::make('Business Details')
+                                    ->description('Enter your pharmacy/business information that will appear on receipts and documents')
+                                    ->icon('heroicon-o-building-storefront')
+                                    ->schema([
+                                        TextInput::make('pharmacy_name')
+                                            ->label('Pharmacy/Business Name')
+                                            ->placeholder('e.g., Symphony Pharmacy')
+                                            ->maxLength(255)
+                                            ->required()
+                                            ->helperText('This name will appear on receipts and invoices')
+                                            ->columnSpanFull(),
+                                        
+                                        TextInput::make('pharmacy_phone')
+                                            ->label('Phone Number')
+                                            ->placeholder('e.g., +254 712 345 678')
+                                            ->tel()
+                                            ->maxLength(20)
+                                            ->helperText('Business contact phone number')
+                                            ->columnSpan(1),
+                                        
+                                        TextInput::make('pharmacy_email')
+                                            ->label('Email Address')
+                                            ->placeholder('e.g., info@symphonypharmacy.com')
+                                            ->email()
+                                            ->maxLength(255)
+                                            ->helperText('Business contact email')
+                                            ->columnSpan(1),
+                                        
+                                        TextInput::make('pharmacy_address')
+                                            ->label('Physical Address')
+                                            ->placeholder('e.g., 123 Main Street, Nairobi, Kenya')
+                                            ->maxLength(500)
+                                            ->helperText('Full business address')
+                                            ->columnSpanFull(),
+                                        
+                                        TextInput::make('pharmacy_tax_id')
+                                            ->label('Tax ID / Registration Number')
+                                            ->placeholder('e.g., P051234567A')
+                                            ->maxLength(100)
+                                            ->helperText('Business registration or tax identification number')
+                                            ->columnSpan(1),
+                                        
+                                        TextInput::make('pharmacy_website')
+                                            ->label('Website (Optional)')
+                                            ->placeholder('e.g., https://www.symphonypharmacy.com')
+                                            ->url()
+                                            ->maxLength(255)
+                                            ->helperText('Your business website URL')
+                                            ->columnSpan(1),
+                                    ])
+                                    ->columns(2),
+                                
+                                Section::make('Usage Information')
+                                    ->schema([
+                                        Placeholder::make('usage_info')
+                                            ->content('**Where this information appears:**
+
+• **Receipts & Invoices:** Your pharmacy name, address, phone, and tax ID appear on all printed and digital receipts
+• **Thermal Printer Receipts:** Business details are printed at the top of every transaction receipt
+• **Customer Communications:** Email and phone number used for customer correspondence
+• **Legal Documents:** Tax ID is included for compliance and record-keeping
+
+**Important:** Keep this information up-to-date to ensure professional documentation and compliance with regulations.')
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->collapsed()
+                                    ->icon('heroicon-o-information-circle'),
+                            ]),
+                        
                         Tabs\Tab::make('General Settings')
                             ->icon('heroicon-o-cog-6-tooth')
                             ->schema([
@@ -429,6 +517,14 @@ class Settings extends Page implements HasForms
             Setting::set('sms_api_key', $this->sms_api_key ?? '', 'sms');
             Setting::set('sms_sender_id', $this->sms_sender_id ?? '', 'sms');
             Setting::set('sms_notification_phone', $this->sms_notification_phone ?? '', 'sms');
+            
+            // Save Pharmacy Information
+            Setting::set('pharmacy_name', $this->pharmacy_name ?? 'Symphony Pharmacy', 'pharmacy');
+            Setting::set('pharmacy_phone', $this->pharmacy_phone ?? '', 'pharmacy');
+            Setting::set('pharmacy_email', $this->pharmacy_email ?? '', 'pharmacy');
+            Setting::set('pharmacy_address', $this->pharmacy_address ?? '', 'pharmacy');
+            Setting::set('pharmacy_tax_id', $this->pharmacy_tax_id ?? '', 'pharmacy');
+            Setting::set('pharmacy_website', $this->pharmacy_website ?? '', 'pharmacy');
 
             // Clear cache
             Setting::clearCache();

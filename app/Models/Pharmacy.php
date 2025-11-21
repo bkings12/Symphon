@@ -14,6 +14,7 @@ class Pharmacy extends Model
         'phone',
         'email',
         'license_number',
+        'tax_id',
         'is_active',
     ];
 

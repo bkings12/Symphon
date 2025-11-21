@@ -28,17 +28,30 @@ foreach ($attributes->all() as $__key => $__value) {
 
 unset($__defined_vars, $__key, $__value); ?>
 
-<div class="receipt-container" style="max-width: 400px; margin: 0 auto; font-family: 'Courier New', monospace; background: white; padding: 2rem; border-radius: 0.5rem; color: #000 !important;">
+<div class="receipt-container" style="max-width: 80mm; margin: 0 auto; font-family: 'Courier New', monospace; background: white; padding: 1rem; border-radius: 0.5rem; color: #000 !important;">
     <!-- Header -->
     <div style="text-align: center; margin-bottom: 1.5rem; border-bottom: 2px dashed #333; padding-bottom: 1rem; color: #000 !important;">
-        <h2 style="margin: 0; font-size: 1.5rem; font-weight: bold; color: #000 !important;"><?php echo e(auth()->user()->pharmacy?->name ?? 'Symphony Pharmacy'); ?></h2>
-        <!--[if BLOCK]><![endif]--><?php if(auth()->user()->pharmacy?->address): ?>
-            <p style="margin: 0.25rem 0; font-size: 0.875rem; color: #000 !important;"><?php echo e(auth()->user()->pharmacy->address); ?></p>
+        <?php
+            // Try to get pharmacy from sale first, then from user, then fallback to settings
+            $pharmacy = $sale->pharmacy ?? auth()->user()->pharmacy;
+            // Prioritize pharmacy model data over settings
+            $pharmacyName = $pharmacy?->name ?? setting('pharmacy_name', 'Symphony Pharmacy');
+            $pharmacyEmail = $pharmacy?->email ?? setting('pharmacy_email', '');
+            $pharmacyPhone = $pharmacy?->phone ?? setting('pharmacy_phone', '');
+            $pharmacyAddress = $pharmacy?->address ?? setting('pharmacy_address', '');
+            $pharmacyTaxId = $pharmacy?->tax_id ?? setting('pharmacy_tax_id', 'N/A');
+        ?>
+        <h2 style="margin: 0; font-size: 1.5rem; font-weight: bold; color: #000 !important;"><?php echo e($pharmacyName); ?></h2>
+        <!--[if BLOCK]><![endif]--><?php if($pharmacyAddress): ?>
+            <p style="margin: 0.25rem 0; font-size: 0.875rem; color: #000 !important;"><?php echo e($pharmacyAddress); ?></p>
         <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
-        <?php if(auth()->user()->pharmacy?->phone): ?>
-            <p style="margin: 0.25rem 0; font-size: 0.875rem; color: #000 !important;">Tel: <?php echo e(auth()->user()->pharmacy->phone); ?></p>
+        <!--[if BLOCK]><![endif]--><?php if($pharmacyPhone): ?>
+            <p style="margin: 0.25rem 0; font-size: 0.875rem; color: #000 !important;">Tel: <?php echo e($pharmacyPhone); ?></p>
         <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
-        <p style="margin: 0.5rem 0 0 0; font-size: 0.75rem; color: #666 !important;">TAX ID: <?php echo e(auth()->user()->pharmacy?->tax_id ?? 'N/A'); ?></p>
+        <!--[if BLOCK]><![endif]--><?php if($pharmacyEmail): ?>
+            <p style="margin: 0.25rem 0; font-size: 0.875rem; color: #000 !important;">Email: <?php echo e($pharmacyEmail); ?></p>
+        <?php endif; ?><!--[if ENDBLOCK]><![endif]-->
+        <p style="margin: 0.5rem 0 0 0; font-size: 0.75rem; color: #666 !important;">TAX ID: <?php echo e($pharmacyTaxId); ?></p>
     </div>
 
     <!-- Transaction Details -->
@@ -131,7 +144,15 @@ unset($__defined_vars, $__key, $__value); ?>
                 <span style="font-weight: bold; color: #000 !important;">Amount Paid:</span>
                 <span style="color: #000 !important;"><?php echo e(format_currency($payment->amount)); ?></span>
             </div>
-            <!--[if BLOCK]><![endif]--><?php if($payment->amount > $sale->total_amount): ?>
+            <!--[if BLOCK]><![endif]--><?php if(strtolower($payment->payment_method) === 'cash'): ?>
+                <?php
+                    $change = max(0, $payment->amount - $sale->total_amount);
+                ?>
+                <div style="display: flex; justify-content: space-between; font-weight: bold; color: #10b981 !important;">
+                    <span>Change:</span>
+                    <span><?php echo e(format_currency($change)); ?></span>
+                </div>
+            <?php elseif($payment->amount > $sale->total_amount): ?>
                 <div style="display: flex; justify-content: space-between; font-weight: bold; color: #10b981 !important;">
                     <span>Change:</span>
                     <span><?php echo e(format_currency($payment->amount - $sale->total_amount)); ?></span>
@@ -193,14 +214,14 @@ unset($__defined_vars, $__key, $__value); ?>
 
 <style>
     @media print {
-        /* Reset page layout - smaller margins to fit receipt */
+        /* Reset page layout for thermal printer (80mm width) */
         @page {
-            size: A4 portrait;
-            margin: 10mm auto;
+            size: 80mm auto;
+            margin: 0;
         }
         
         html, body {
-            width: 100%;
+            width: 80mm;
             height: auto;
             margin: 0;
             padding: 0;
@@ -226,16 +247,20 @@ unset($__defined_vars, $__key, $__value); ?>
             transform: none !important;
             width: 80mm !important;
             max-width: 80mm !important;
-            margin: 0 auto !important;
-            padding: 1rem !important;
+            min-width: 80mm !important;
+            margin: 0 !important;
+            padding: 5mm !important;
             background: white !important;
             page-break-after: avoid !important;
             page-break-inside: avoid !important;
             box-shadow: none !important;
             border: none !important;
+            border-radius: 0 !important;
             height: auto !important;
             min-height: auto !important;
             max-height: none !important;
+            font-size: 11pt !important;
+            line-height: 1.3 !important;
         }
         
         /* Ensure all receipt content is visible and has proper colors */
