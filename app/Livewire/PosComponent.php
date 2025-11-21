@@ -460,6 +460,23 @@ class PosComponent extends Component
             }
         }
 
+        // Recalculate cart totals to ensure they're up to date
+        $this->updateCartTotals();
+        
+        // For cash payments, ensure amountPaid is set and valid
+        if (strtolower(trim((string)$this->paymentMethod)) === 'cash') {
+            // If amountPaid is 0 or equals cartTotal (default), it might not have been updated
+            if ($this->amountPaid <= 0 || $this->amountPaid == $this->cartTotal) {
+                // Check if user actually entered a different amount - if not, use cartTotal (no change)
+                // But log it for debugging
+                Log::info('Cash payment - amountPaid check', [
+                    'amountPaid' => $this->amountPaid,
+                    'cartTotal' => $this->cartTotal,
+                    'paymentMethod' => $this->paymentMethod,
+                ]);
+            }
+        }
+        
         if ((float)$this->amountPaid < (float)$this->cartTotal) {
             $this->dispatch('notify', message: 'Insufficient payment amount', type: 'error');
             return;
@@ -467,8 +484,13 @@ class PosComponent extends Component
 
         $this->processingSale = true;
 
+        // Capture the amountPaid value before entering the transaction
+        // to avoid issues with Livewire property hydration
+        $amountPaidByCustomer = (float)$this->amountPaid;
+        $paymentMethodSelected = trim((string)$this->paymentMethod);
+
         try {
-            DB::transaction(function () {
+            DB::transaction(function () use ($amountPaidByCustomer, $paymentMethodSelected) {
                 $user = Auth::user();
                 $pharmacy = $user->pharmacy ?? Pharmacy::first();
 
@@ -582,13 +604,47 @@ class PosComponent extends Component
                     $medicine->decrement('stock_quantity', $quantity);
                 }
 
-                // Use the sale's total_amount which was just created, ensuring it's fresh
+                // Determine payment amount based on payment method
+                // For cash payments, use the actual amount paid (which may include change)
+                // For other payment methods, use the sale total
+                $paymentMethod = $paymentMethodSelected;
+                $paymentMethodLower = strtolower($paymentMethod);
+                
+                // Check 4: Ensure payment method is not mpesa or bank_paybill in regular flow
+                if ($paymentMethodLower === 'mpesa' || $paymentMethodLower === 'bank_paybill') {
+                    throw new \Exception('STK Push payment should use processSTKPayment method. Current method: "' . $paymentMethod . '"');
+                }
+                
+                // For cash payments, use the amount paid by customer (includes change)
+                // For other payment methods, use the sale total
+                if ($paymentMethodLower === 'cash') {
+                    // Use the captured amount (not from $this to avoid hydration issues)
+                    $paymentAmount = $amountPaidByCustomer;
+                    
+                    // Log for debugging
+                    Log::info('Cash payment processing - NEW CODE', [
+                        'amountPaidByCustomer' => $amountPaidByCustomer,
+                        'cartTotal' => $this->cartTotal,
+                        'calculatedTotal' => $calculatedTotal,
+                        'paymentAmount' => $paymentAmount,
+                        'change_calculated' => $paymentAmount - $calculatedTotal,
+                    ]);
+                    
+                    // Temporary validation to ensure value is captured
+                    if ($amountPaidByCustomer <= 0 || $amountPaidByCustomer == $calculatedTotal) {
+                        Log::warning('AmountPaid might not have been captured correctly', [
+                            'amountPaidByCustomer' => $amountPaidByCustomer,
+                            'calculatedTotal' => $calculatedTotal,
+                        ]);
+                    }
+                } else {
                 $paymentAmount = (float)$sale->total_amount;
+                }
                 
                 // CRITICAL: Multiple validation checks
                 // Check 1: Ensure it's numeric
                 if (!is_numeric($paymentAmount) || $paymentAmount <= 0) {
-                    throw new \Exception('Invalid payment amount from sale: ' . $sale->total_amount);
+                    throw new \Exception('Invalid payment amount: ' . $paymentAmount);
                 }
                 
                 // Check 2: Ensure it's not the phone number (compare as both string and number)
@@ -604,16 +660,9 @@ class PosComponent extends Component
                     throw new \Exception('Payment amount out of reasonable range: ' . $paymentAmount);
                 }
                 
-                // Check 4: Ensure payment method is not mpesa or bank_paybill in regular flow
-                $paymentMethod = trim((string)$this->paymentMethod);
-                $paymentMethodLower = strtolower($paymentMethod);
-                if ($paymentMethodLower === 'mpesa' || $paymentMethodLower === 'bank_paybill') {
-                    throw new \Exception('STK Push payment should use processSTKPayment method. Current method: "' . $paymentMethod . '"');
-                }
-                
-                // Final validation: Compare with calculated total to ensure they match
-                if (abs($paymentAmount - $calculatedTotal) > 0.01) {
-                    throw new \Exception('Payment amount mismatch. Sale total: ' . $paymentAmount . ', Calculated: ' . $calculatedTotal);
+                // Check 5: For cash payments, ensure amount paid is at least the sale total
+                if ($paymentMethodLower === 'cash' && $paymentAmount < $calculatedTotal) {
+                    throw new \Exception('Amount paid (' . $paymentAmount . ') is less than total amount (' . $calculatedTotal . ')');
                 }
                 
                 $payment = Payment::create([
@@ -621,16 +670,39 @@ class PosComponent extends Component
                     'payment_method' => $paymentMethod,
                     'amount' => $paymentAmount,
                     'reference_number' => 'PAY-' . strtoupper(uniqid()),
-                    'notes' => 'POS Payment',
+                    'notes' => ($paymentMethodLower === 'cash' && $paymentAmount > $calculatedTotal) 
+                        ? "POS Payment - Cash: Paid {$paymentAmount}, Change: " . ($paymentAmount - $calculatedTotal)
+                        : 'POS Payment',
                     'status' => 'completed',
+                ]);
+
+                // Log payment creation for debugging
+                Log::info('Payment created - NEW CODE', [
+                    'payment_id' => $payment->id,
+                    'payment_amount' => $payment->amount,
+                    'payment_amount_used' => $paymentAmount,
+                    'sale_total' => $sale->total_amount,
+                    'change' => $payment->amount - $sale->total_amount,
+                    'payment_method' => $paymentMethod,
                 ]);
 
                 // Store receipt data - reload with relationships
                 $sale->refresh();
-                $this->lastSale = $sale->load('items.medicine', 'customer', 'payments');
+                $this->lastSale = $sale->load('items.medicine', 'customer', 'payments', 'pharmacy');
                 $this->lastSaleItems = $sale->items()->with('medicine')->get()->toArray();
                 $this->lastCustomer = $sale->customer;
-                $this->lastPayment = $payment;
+                // Get payment from sale's payments relationship to ensure we have the correct amount
+                $this->lastPayment = $sale->payments->first();
+                
+                // Log the payment that will be used for receipt
+                if ($this->lastPayment) {
+                    Log::info('Payment for receipt', [
+                        'payment_id' => $this->lastPayment->id,
+                        'payment_amount' => $this->lastPayment->amount,
+                        'sale_total' => $this->lastSale->total_amount,
+                        'change' => $this->lastPayment->amount - $this->lastSale->total_amount,
+                    ]);
+                }
             });
 
             $this->resetCart();
@@ -1057,7 +1129,7 @@ class PosComponent extends Component
             $this->stkProcessing = false;
             
             // Load sale data for receipt
-            $sale = Sale::with(['items.medicine', 'customer', 'payments'])->find($payment->sale_id);
+            $sale = Sale::with(['items.medicine', 'customer', 'payments', 'pharmacy'])->find($payment->sale_id);
             if ($sale) {
                 $this->lastSale = $sale;
                 $this->lastSaleItems = $sale->items;
@@ -1112,6 +1184,29 @@ class PosComponent extends Component
         $this->lastSaleItems = [];
         $this->lastCustomer = null;
         $this->lastPayment = null;
+    }
+
+    public function closePaymentModal()
+    {
+        $this->showPaymentModal = false;
+        $this->amountPaid = 0;
+        $this->change = 0;
+        $this->stkPhoneNumber = '';
+        $this->stkProcessing = false;
+        $this->stkStatus = null;
+    }
+
+    public function printThermal($saleId)
+    {
+        try {
+            $sale = Sale::findOrFail($saleId);
+            
+            // Dispatch event to frontend to make API call
+            $this->dispatch('print-thermal', saleId: $saleId);
+            
+        } catch (\Exception $e) {
+            $this->dispatch('notify', message: 'Failed to print: ' . $e->getMessage(), type: 'error');
+        }
     }
 
     public function render()
