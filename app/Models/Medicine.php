@@ -39,10 +39,6 @@ class Medicine extends Model
         return $this->belongsTo(Category::class);
     }
 
-    public function stockBatches(): HasMany
-    {
-        return $this->hasMany(StockBatch::class);
-    }
 
     public function purchaseItems(): HasMany
     {

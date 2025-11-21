@@ -66,10 +66,6 @@ class STKPush
 
                             // Update stock - decrement quantities
                             foreach ($sale->items as $saleItem) {
-                                $stockBatch = $saleItem->stockBatch;
-                                if ($stockBatch) {
-                                    $stockBatch->decrement('remaining_quantity', $saleItem->quantity);
-                                }
                                 $medicine = $saleItem->medicine;
                                 if ($medicine) {
                                     $medicine->decrement('stock_quantity', $saleItem->quantity);

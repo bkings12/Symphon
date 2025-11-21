@@ -10,7 +10,6 @@ use App\Models\Payment;
 use App\Models\Pharmacy;
 use App\Models\Sale;
 use App\Models\SaleItem;
-use App\Models\StockBatch;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
@@ -495,17 +494,6 @@ class PointOfSale extends Page
                         throw new \Exception("Insufficient stock for {$medicine->name}");
                     }
 
-                    // Get available stock batch (FIFO - First In First Out)
-                    $stockBatch = StockBatch::where('medicine_id', $medicine->id)
-                        ->where('remaining_quantity', '>', 0)
-                        ->where('expiry_date', '>', now())
-                        ->orderBy('expiry_date', 'asc')
-                        ->first();
-
-                    if (!$stockBatch || $stockBatch->remaining_quantity < $cartItem['quantity']) {
-                        throw new \Exception("Insufficient stock batch for {$medicine->name}");
-                    }
-
                     $quantity = $cartItem['quantity'];
                     $unitPrice = $cartItem['selling_price'];
                     $totalPrice = $quantity * $unitPrice;
@@ -514,15 +502,12 @@ class PointOfSale extends Page
                     SaleItem::create([
                         'sale_id' => $sale->id,
                         'medicine_id' => $medicine->id,
-                        'stock_batch_id' => $stockBatch->id,
+                        'stock_batch_id' => null,
                         'quantity' => $quantity,
                         'unit_price' => $unitPrice,
                         'discount_amount' => 0,
                         'total_price' => $totalPrice,
                     ]);
-
-                    // Update stock batch
-                    $stockBatch->decrement('remaining_quantity', $quantity);
 
                     // Update medicine stock
                     $medicine->decrement('stock_quantity', $quantity);
@@ -701,17 +686,6 @@ class PointOfSale extends Page
                     throw new \Exception("Insufficient stock for {$medicine->name}");
                 }
 
-                // Get available stock batch (FIFO - First In First Out)
-                $stockBatch = StockBatch::where('medicine_id', $medicine->id)
-                    ->where('remaining_quantity', '>', 0)
-                    ->where('expiry_date', '>', now())
-                    ->orderBy('expiry_date', 'asc')
-                    ->first();
-
-                if (!$stockBatch || $stockBatch->remaining_quantity < $cartItem['quantity']) {
-                    throw new \Exception("Insufficient stock batch for {$medicine->name}");
-                }
-
                 $quantity = $cartItem['quantity'];
                 $unitPrice = $cartItem['selling_price'];
                 $totalPrice = $quantity * $unitPrice;
@@ -720,7 +694,7 @@ class PointOfSale extends Page
                 SaleItem::create([
                     'sale_id' => $sale->id,
                     'medicine_id' => $medicine->id,
-                    'stock_batch_id' => $stockBatch->id,
+                    'stock_batch_id' => null,
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
                     'discount_amount' => 0,
@@ -728,6 +702,7 @@ class PointOfSale extends Page
                 ]);
 
                 // Reserve stock (don't decrement yet - will decrement when payment is confirmed)
+                // Note: Stock is decremented when payment is confirmed in STK callback
             }
 
             // Create pending payment - ensure amount is numeric

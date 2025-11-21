@@ -9,7 +9,6 @@ use App\Models\Pharmacy;
 use App\Models\Prescription;
 use App\Models\Sale;
 use App\Models\SaleItem;
-use App\Models\StockBatch;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -58,13 +57,8 @@ class SaleSeeder extends Seeder
                 $medicine = $prescriptionItem->medicine;
                 $quantity = $prescriptionItem->quantity;
                 
-                // Get available stock batch
-                $stockBatch = StockBatch::where('medicine_id', $medicine->id)
-                    ->where('remaining_quantity', '>', 0)
-                    ->orderBy('expiry_date', 'asc')
-                    ->first();
-
-                if ($stockBatch && $stockBatch->remaining_quantity >= $quantity) {
+                // Check if medicine has enough stock
+                if ($medicine->stock_quantity >= $quantity) {
                     $unitPrice = $medicine->selling_price;
                     $itemTotal = $quantity * $unitPrice;
                     $subtotal += $itemTotal;
@@ -72,7 +66,7 @@ class SaleSeeder extends Seeder
                     SaleItem::create([
                         'sale_id' => $sale->id,
                         'medicine_id' => $medicine->id,
-                        'stock_batch_id' => $stockBatch->id,
+                        'stock_batch_id' => null,
                         'quantity' => $quantity,
                         'unit_price' => $unitPrice,
                         'discount_amount' => 0,
@@ -80,7 +74,6 @@ class SaleSeeder extends Seeder
                     ]);
 
                     // Update stock
-                    $stockBatch->decrement('remaining_quantity', $quantity);
                     $medicine->decrement('stock_quantity', $quantity);
                 }
             }
@@ -144,13 +137,8 @@ class SaleSeeder extends Seeder
             foreach ($medicines as $medicine) {
                 $quantity = rand(1, 5);
                 
-                // Get available stock batch
-                $stockBatch = StockBatch::where('medicine_id', $medicine->id)
-                    ->where('remaining_quantity', '>', 0)
-                    ->orderBy('expiry_date', 'asc')
-                    ->first();
-
-                if ($stockBatch && $stockBatch->remaining_quantity >= $quantity) {
+                // Check if medicine has enough stock
+                if ($medicine->stock_quantity >= $quantity) {
                     $unitPrice = $medicine->selling_price;
                     $itemTotal = $quantity * $unitPrice;
                     $subtotal += $itemTotal;
@@ -158,7 +146,7 @@ class SaleSeeder extends Seeder
                     SaleItem::create([
                         'sale_id' => $sale->id,
                         'medicine_id' => $medicine->id,
-                        'stock_batch_id' => $stockBatch->id,
+                        'stock_batch_id' => null,
                         'quantity' => $quantity,
                         'unit_price' => $unitPrice,
                         'discount_amount' => 0,
@@ -166,7 +154,6 @@ class SaleSeeder extends Seeder
                     ]);
 
                     // Update stock
-                    $stockBatch->decrement('remaining_quantity', $quantity);
                     $medicine->decrement('stock_quantity', $quantity);
                 }
             }

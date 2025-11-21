@@ -6,7 +6,6 @@ use App\Models\Medicine;
 use App\Models\Pharmacy;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
-use App\Models\StockBatch;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -57,19 +56,8 @@ class PurchaseSeeder extends Seeder
                 $itemTotal = $quantity * $unitCost;
                 $subtotal += $itemTotal;
 
-                // Create stock batch first
                 $expiryDate = $purchaseDate->copy()->addMonths(rand(12, 36));
                 $batchNumber = 'BATCH-' . strtoupper(uniqid());
-                
-                $stockBatch = StockBatch::create([
-                    'purchase_id' => $purchase->id,
-                    'medicine_id' => $medicine->id,
-                    'batch_number' => $batchNumber,
-                    'quantity' => $quantity,
-                    'remaining_quantity' => $quantity,
-                    'expiry_date' => $expiryDate,
-                    'cost_price' => $unitCost,
-                ]);
 
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id,

@@ -53,8 +53,4 @@ class Purchase extends Model
         return $this->hasMany(PurchaseItem::class);
     }
 
-    public function stockBatches(): HasMany
-    {
-        return $this->hasMany(StockBatch::class);
-    }
 }

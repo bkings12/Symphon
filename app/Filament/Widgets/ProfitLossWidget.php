@@ -21,8 +21,8 @@ class ProfitLossWidget extends BaseWidget
         // Helper function to calculate COGS (Cost of Goods Sold)
         $calculateCOGS = function ($query) {
             return SaleItem::whereHas('sale', $query)
-                ->join('stock_batches', 'sale_items.stock_batch_id', '=', 'stock_batches.id')
-                ->selectRaw('SUM(sale_items.quantity * stock_batches.cost_price) as cogs')
+                ->join('medicines', 'sale_items.medicine_id', '=', 'medicines.id')
+                ->selectRaw('SUM(sale_items.quantity * medicines.cost_price) as cogs')
                 ->value('cogs') ?? 0;
         };
         
