@@ -39,7 +39,6 @@ class Medicine extends Model
         return $this->belongsTo(Category::class);
     }
 
-
     public function purchaseItems(): HasMany
     {
         return $this->hasMany(PurchaseItem::class);
@@ -58,5 +57,30 @@ class Medicine extends Model
     public function isLowStock(): bool
     {
         return $this->stock_quantity <= $this->reorder_level;
+    }
+
+    /**
+     * Human-readable blockers for delete (matches FK restrict on sale_items, purchase_items, prescription_items).
+     */
+    public function deleteBlockerSummary(): ?string
+    {
+        $parts = [];
+
+        $saleCount = $this->saleItems()->count();
+        if ($saleCount > 0) {
+            $parts[] = "{$saleCount} sale line item(s)";
+        }
+
+        $purchaseCount = $this->purchaseItems()->count();
+        if ($purchaseCount > 0) {
+            $parts[] = "{$purchaseCount} purchase line item(s)";
+        }
+
+        $rxCount = $this->prescriptionItems()->count();
+        if ($rxCount > 0) {
+            $parts[] = "{$rxCount} prescription line item(s)";
+        }
+
+        return $parts === [] ? null : implode(', ', $parts);
     }
 }

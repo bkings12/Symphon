@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Medicines\Tables;
 
 use App\Helpers\SettingsHelper;
+use App\Support\MedicineDeletion;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -77,7 +78,8 @@ class MedicinesTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->using(fn (DeleteBulkAction $action, $records): void => MedicineDeletion::bulkDeleteRecords($action, $records)),
                 ]),
             ])
             ->defaultSort('name');
