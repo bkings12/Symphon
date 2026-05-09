@@ -79,7 +79,9 @@ class MedicinesTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->using(fn (DeleteBulkAction $action, $records): void => MedicineDeletion::bulkDeleteRecords($action, $records)),
+                        ->using(function (DeleteBulkAction $action, $records): void {
+                            MedicineDeletion::bulkDeleteRecords($action, $records);
+                        }),
                 ]),
             ])
             ->defaultSort('name');
