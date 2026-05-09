@@ -4,10 +4,13 @@ namespace App\Filament\Resources\Sales\Tables;
 
 use App\Helpers\SettingsHelper;
 use App\Models\Sale;
+use App\Support\SaleReceiptPrinting;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
 
@@ -99,6 +102,17 @@ class SalesTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                Action::make('reprintReceipt')
+                    ->label('Receipt')
+                    ->tooltip('Reprint thermal receipt')
+                    ->icon(Heroicon::OutlinedPrinter)
+                    ->iconButton()
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading('Reprint receipt')
+                    ->modalDescription('Send this sale to the thermal printer?')
+                    ->modalSubmitActionLabel('Print')
+                    ->action(fn (Sale $record) => SaleReceiptPrinting::sendThermalAndNotify($record)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

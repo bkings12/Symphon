@@ -3,26 +3,27 @@
 namespace App\Services;
 
 use App\Models\Sale;
-use Mike42\Escpos\Printer;
-use Mike42\Escpos\PrintConnectors\NetworkPrintConnector;
-use Mike42\Escpos\PrintConnectors\FilePrintConnector;
-use Mike42\Escpos\PrintConnectors\WindowsPrintConnector;
-use Mike42\Escpos\PrintConnectors\CupsPrintConnector;
-use Mike42\Escpos\EscposImage;
 use Exception;
+use Mike42\Escpos\PrintConnectors\CupsPrintConnector;
+use Mike42\Escpos\PrintConnectors\FilePrintConnector;
+use Mike42\Escpos\PrintConnectors\NetworkPrintConnector;
+use Mike42\Escpos\PrintConnectors\WindowsPrintConnector;
+use Mike42\Escpos\Printer;
 
 class ThermalPrinterService
 {
     protected $printer;
+
     protected $connector;
+
     protected $closed = false;
 
     /**
      * Initialize printer connection
-     * 
-     * @param string $type Type of connection: 'network', 'file', 'windows', 'cups'
-     * @param string $destination IP address, file path, printer name, or CUPS printer name
-     * @param int $port Port number for network printers (default 9100)
+     *
+     * @param  string  $type  Type of connection: 'network', 'file', 'windows', 'cups'
+     * @param  string  $destination  IP address, file path, printer name, or CUPS printer name
+     * @param  int  $port  Port number for network printers (default 9100)
      */
     public function __construct($type = 'cups', $destination = 'POS-80', $port = 9100)
     {
@@ -40,14 +41,14 @@ class ThermalPrinterService
                 case 'file':
                 default:
                     // Try common device paths if destination doesn't exist
-                    if (!file_exists($destination)) {
+                    if (! file_exists($destination)) {
                         $commonPaths = [
                             '/dev/usb/lp0',
                             '/dev/usb/lp1',
                             '/dev/lp0',
                             '/dev/lp1',
                         ];
-                        
+
                         $found = false;
                         foreach ($commonPaths as $path) {
                             if (file_exists($path)) {
@@ -56,18 +57,18 @@ class ThermalPrinterService
                                 break;
                             }
                         }
-                        
-                        if (!$found) {
-                            throw new Exception("Printer device not found at: $destination. Tried: " . implode(', ', $commonPaths));
+
+                        if (! $found) {
+                            throw new Exception("Printer device not found at: $destination. Tried: ".implode(', ', $commonPaths));
                         }
                     }
                     $this->connector = new FilePrintConnector($destination);
                     break;
             }
-            
+
             $this->printer = new Printer($this->connector);
         } catch (Exception $e) {
-            throw new Exception("Failed to connect to printer ($type/$destination): " . $e->getMessage());
+            throw new Exception("Failed to connect to printer ($type/$destination): ".$e->getMessage());
         }
     }
 
@@ -78,102 +79,102 @@ class ThermalPrinterService
     {
         try {
             $sale->load(['items.medicine', 'user', 'customer', 'payments', 'pharmacy']);
-            
+
             // Get pharmacy from sale first, then from user
             $pharmacy = $sale->pharmacy ?? auth()->user()?->pharmacy;
-            
+
             // Header - prioritize pharmacy model data over settings
             $this->printer->setJustification(Printer::JUSTIFY_CENTER);
             $this->printer->setTextSize(2, 2);
-            $pharmacyName = $pharmacy?->name ?? setting('pharmacy_name', "Symphony Pharmacy");
-            $this->printer->text($pharmacyName . "\n");
+            $pharmacyName = $pharmacy?->name ?? setting('pharmacy_name', 'Symphony Pharmacy');
+            $this->printer->text($pharmacyName."\n");
             $this->printer->setTextSize(1, 1);
-            
+
             $address = $pharmacy?->address ?? setting('pharmacy_address', '');
             if ($address) {
-                $this->printer->text($address . "\n");
+                $this->printer->text($address."\n");
             }
-            
+
             $phone = $pharmacy?->phone ?? setting('pharmacy_phone', '');
             if ($phone) {
-                $this->printer->text("Tel: " . $phone . "\n");
+                $this->printer->text('Tel: '.$phone."\n");
             }
-            
+
             $email = $pharmacy?->email ?? setting('pharmacy_email', '');
             if ($email) {
-                $this->printer->text("Email: " . $email . "\n");
+                $this->printer->text('Email: '.$email."\n");
             }
-            
+
             $taxId = $pharmacy?->tax_id ?? setting('pharmacy_tax_id', 'N/A');
-            $this->printer->text("TAX ID: " . $taxId . "\n");
+            $this->printer->text('TAX ID: '.$taxId."\n");
             $this->printer->feed();
-            
+
             // Divider
-            $this->printer->text(str_repeat("-", 48) . "\n");
-            
+            $this->printer->text(str_repeat('-', 48)."\n");
+
             // Transaction Details
             $this->printer->setJustification(Printer::JUSTIFY_LEFT);
-            $this->printer->text("Invoice #: " . $sale->invoice_number . "\n");
-            $this->printer->text("Date: " . $sale->sale_date->format('d/m/Y H:i') . "\n");
-            $this->printer->text("Cashier: " . $sale->user->name . "\n");
-            
+            $this->printer->text('Invoice #: '.$sale->invoice_number."\n");
+            $this->printer->text('Date: '.$sale->sale_date->format('d/m/Y H:i')."\n");
+            $this->printer->text('Cashier: '.$sale->user->name."\n");
+
             if ($sale->customer) {
-                $this->printer->text("Customer: " . $sale->customer->name . "\n");
+                $this->printer->text('Customer: '.$sale->customer->name."\n");
                 if ($sale->customer->phone) {
-                    $this->printer->text("Phone: " . $sale->customer->phone . "\n");
+                    $this->printer->text('Phone: '.$sale->customer->phone."\n");
                 }
             }
-            
+
             $this->printer->feed();
-            $this->printer->text(str_repeat("-", 48) . "\n");
-            
+            $this->printer->text(str_repeat('-', 48)."\n");
+
             // Items Header
-            $this->printer->text(sprintf("%-20s %4s %8s %10s\n", "Item", "Qty", "Price", "Total"));
-            $this->printer->text(str_repeat("-", 48) . "\n");
-            
+            $this->printer->text(sprintf("%-20s %4s %8s %10s\n", 'Item', 'Qty', 'Price', 'Total'));
+            $this->printer->text(str_repeat('-', 48)."\n");
+
             // Items
             foreach ($sale->items as $item) {
                 $name = substr($item->medicine->name, 0, 20);
                 $qty = $item->quantity;
                 $price = number_format($item->unit_price, 2);
                 $total = number_format($item->total_price, 2);
-                
+
                 $this->printer->text(sprintf("%-20s %4d %8s %10s\n", $name, $qty, $price, $total));
-                
+
                 if ($item->medicine->generic_name) {
                     $generic = substr($item->medicine->generic_name, 0, 30);
-                    $this->printer->text("  " . $generic . "\n");
+                    $this->printer->text('  '.$generic."\n");
                 }
             }
-            
-            $this->printer->text(str_repeat("-", 48) . "\n");
-            
+
+            $this->printer->text(str_repeat('-', 48)."\n");
+
             // Totals
             $this->printer->setEmphasis(false);
-            $this->printer->text(sprintf("%-32s %12s\n", "Subtotal:", format_currency($sale->subtotal)));
-            
+            $this->printer->text(sprintf("%-32s %12s\n", 'Subtotal:', format_currency($sale->subtotal)));
+
             if ($sale->discount_amount > 0) {
-                $this->printer->text(sprintf("%-32s %12s\n", "Discount:", "-" . format_currency($sale->discount_amount)));
+                $this->printer->text(sprintf("%-32s %12s\n", 'Discount:', '-'.format_currency($sale->discount_amount)));
             }
-            
-            $this->printer->text(sprintf("%-32s %12s\n", "Tax (" . tax_rate() . "%):", format_currency($sale->tax_amount)));
-            
+
+            $this->printer->text(sprintf("%-32s %12s\n", 'Tax ('.tax_rate().'%):', format_currency($sale->tax_amount)));
+
             $this->printer->feed();
             $this->printer->setEmphasis(true);
             $this->printer->setTextSize(2, 2);
-            $this->printer->text(sprintf("%-20s %12s\n", "TOTAL:", format_currency($sale->total_amount)));
+            $this->printer->text(sprintf("%-20s %12s\n", 'TOTAL:', format_currency($sale->total_amount)));
             $this->printer->setTextSize(1, 1);
             $this->printer->setEmphasis(false);
-            
+
             $this->printer->feed();
-            $this->printer->text(str_repeat("-", 48) . "\n");
-            
+            $this->printer->text(str_repeat('-', 48)."\n");
+
             // Payment Info
             $payment = $sale->payments->first();
             if ($payment) {
-                $this->printer->text("Payment Method: " . strtoupper($payment->payment_method) . "\n");
-                $this->printer->text(sprintf("%-32s %12s\n", "Amount Paid:", format_currency($payment->amount)));
-                
+                $this->printer->text('Payment Method: '.strtoupper($payment->payment_method)."\n");
+                $this->printer->text(sprintf("%-32s %12s\n", 'Amount Paid:', format_currency($payment->amount)));
+
                 // Always show change for cash payments, show for others only if amount > total
                 $showChange = false;
                 $change = 0;
@@ -184,25 +185,25 @@ class ThermalPrinterService
                     $change = $payment->amount - $sale->total_amount;
                     $showChange = true;
                 }
-                
+
                 if ($showChange) {
                     $this->printer->setEmphasis(true);
-                    $this->printer->text(sprintf("%-32s %12s\n", "Change:", format_currency($change)));
+                    $this->printer->text(sprintf("%-32s %12s\n", 'Change:', format_currency($change)));
                     $this->printer->setEmphasis(false);
                 }
-                
+
                 $this->printer->feed();
             }
-            
+
             // Footer
             $this->printer->setJustification(Printer::JUSTIFY_CENTER);
-            $this->printer->text(str_repeat("-", 48) . "\n");
+            $this->printer->text(str_repeat('-', 48)."\n");
             $this->printer->setEmphasis(true);
-            $this->printer->text(setting('receipt_footer', 'Thank you for your business!') . "\n");
+            $this->printer->text(setting('receipt_footer', 'Thank you for your business!')."\n");
             $this->printer->setEmphasis(false);
             $this->printer->text("This is a valid receipt\n");
             $this->printer->text("Powered by Symphony POS\n");
-            
+
             // Barcode (if supported)
             try {
                 $this->printer->feed();
@@ -213,14 +214,14 @@ class ThermalPrinterService
             } catch (Exception $e) {
                 // Barcode not supported, skip
             }
-            
+
             // Cut paper - this finalizes the print job
             $this->printer->feed(3);
             $this->printer->cut();
-            
+
             // Close connection - this sends the job to CUPS
             $this->close();
-            
+
         } catch (Exception $e) {
             // Try to close even on error
             try {
@@ -230,7 +231,7 @@ class ThermalPrinterService
             } catch (Exception $closeException) {
                 // Ignore close errors during error handling
             }
-            throw new Exception("Failed to print receipt: " . $e->getMessage());
+            throw new Exception('Failed to print receipt: '.$e->getMessage());
         }
     }
 
@@ -242,7 +243,7 @@ class ThermalPrinterService
         if ($this->closed) {
             return; // Already closed
         }
-        
+
         if ($this->printer && $this->connector) {
             try {
                 $this->printer->close();
@@ -265,9 +266,24 @@ class ThermalPrinterService
      */
     public function __destruct()
     {
-        if (!$this->closed) {
+        if (! $this->closed) {
             $this->close();
         }
     }
-}
 
+    /**
+     * Print a receipt using config/printing.php (type, destination, port).
+     *
+     * @throws Exception
+     */
+    public static function printSaleReceipt(Sale $sale): void
+    {
+        $service = new self(
+            config('printing.type', 'cups'),
+            config('printing.destination', 'POS-80'),
+            (int) config('printing.port', 9100),
+        );
+
+        $service->printReceipt($sale);
+    }
+}

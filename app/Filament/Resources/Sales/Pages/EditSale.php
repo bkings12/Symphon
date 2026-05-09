@@ -3,9 +3,12 @@
 namespace App\Filament\Resources\Sales\Pages;
 
 use App\Filament\Resources\Sales\SaleResource;
+use App\Support\SaleReceiptPrinting;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Support\Icons\Heroicon;
 
 class EditSale extends EditRecord
 {
@@ -14,6 +17,15 @@ class EditSale extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('reprintReceipt')
+                ->label('Reprint receipt')
+                ->icon(Heroicon::OutlinedPrinter)
+                ->color('gray')
+                ->requiresConfirmation()
+                ->modalHeading('Reprint receipt')
+                ->modalDescription('Send this sale to the thermal printer configured under Printing settings?')
+                ->modalSubmitActionLabel('Print')
+                ->action(fn () => SaleReceiptPrinting::sendThermalAndNotify($this->getRecord())),
             ViewAction::make(),
             DeleteAction::make(),
         ];

@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Sale;
 use App\Services\ThermalPrinterService;
-use Illuminate\Http\Request;
 use Exception;
+use Illuminate\Http\Request;
 
 class ThermalPrintController extends Controller
 {
@@ -15,33 +15,24 @@ class ThermalPrintController extends Controller
     public function printReceipt(Request $request, Sale $sale)
     {
         // Disable all error reporting temporarily to force JSON response
-        set_error_handler(function($errno, $errstr, $errfile, $errline) {
+        set_error_handler(function ($errno, $errstr, $errfile, $errline) {
             // Convert errors to exceptions
             throw new \ErrorException($errstr, 0, $errno, $errfile, $errline);
         });
 
         try {
-            // Force CUPS configuration (working setup)
-            $printerType = 'cups';
-            $printerDestination = 'POS-80';
-            $printerPort = 9100;
-
-            // Initialize printer service
-            $printer = new ThermalPrinterService($printerType, $printerDestination, $printerPort);
-            
-            // Print receipt (this handles closing internally)
-            $printer->printReceipt($sale);
+            ThermalPrinterService::printSaleReceipt($sale);
 
             restore_error_handler();
-            
+
             return response()->json([
                 'success' => true,
-                'message' => 'Receipt printed successfully'
+                'message' => 'Receipt printed successfully',
             ]);
 
         } catch (\Throwable $e) {
             restore_error_handler();
-            
+
             // Return error without logging to avoid permission issues
             return response()->json([
                 'success' => false,
@@ -50,9 +41,9 @@ class ThermalPrintController extends Controller
                 'file' => basename($e->getFile()),
                 'line' => $e->getLine(),
                 'config' => [
-                    'type' => $printerType ?? 'unknown',
-                    'destination' => $printerDestination ?? 'unknown'
-                ]
+                    'type' => config('printing.type', 'unknown'),
+                    'destination' => config('printing.destination', 'unknown'),
+                ],
             ], 200); // Return 200 instead of 500 to ensure we get the message
         }
     }
@@ -68,7 +59,7 @@ class ThermalPrintController extends Controller
             $printerPort = config('printing.port', 9100);
 
             $printer = new ThermalPrinterService($printerType, $printerDestination, $printerPort);
-            
+
             // Print test page
             $printer->printer->setJustification(\Mike42\Escpos\Printer::JUSTIFY_CENTER);
             $printer->printer->setTextSize(2, 2);
@@ -76,21 +67,21 @@ class ThermalPrintController extends Controller
             $printer->printer->setTextSize(1, 1);
             $printer->printer->feed();
             $printer->printer->text("Printer is working correctly!\n");
-            $printer->printer->text(date('Y-m-d H:i:s') . "\n");
+            $printer->printer->text(date('Y-m-d H:i:s')."\n");
             $printer->printer->feed(3);
             $printer->printer->cut();
-            
+
             $printer->close();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Test print completed successfully'
+                'message' => 'Test print completed successfully',
             ]);
 
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Printer test failed: ' . $e->getMessage()
+                'message' => 'Printer test failed: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -133,4 +124,3 @@ class ThermalPrintController extends Controller
         return response()->json($diagnostics);
     }
 }
-
