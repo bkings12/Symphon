@@ -15,14 +15,12 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
-use UnitEnum;
 
 class Settings extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-cog-6-tooth';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
     protected string $view = 'filament.pages.settings';
 
@@ -34,37 +32,63 @@ class Settings extends Page implements HasForms
 
     // Form fields
     public $currency;
+
     public $currency_symbol;
+
     public $tax_rate;
+
     public $receipt_footer;
+
+    public $receipt_paybill;
+
+    public $receipt_paybill_account;
+
     public $low_stock_threshold;
+
     public $mpesa_enabled;
+
     public $mpesa_paybill;
+
     public $mpesa_consumer_key;
+
     public $mpesa_consumer_secret;
+
     public $mpesa_passkey;
+
     public $mpesa_shortcode;
+
     public $mpesa_environment;
-    
+
     // Bank Paybill Settings
     public $payment_type; // 'mpesa' or 'bank_stk'
+
     public $bank_code;
+
     public $bank_account_number;
     // Removed: account_reference_type - now always uses bank_account_number from settings
-    
+
     // SMS Settings
     public $sms_enabled;
+
     public $sms_provider;
+
     public $sms_api_key;
+
     public $sms_sender_id;
+
     public $sms_notification_phone;
-    
+
     // Pharmacy Information
     public $pharmacy_name;
+
     public $pharmacy_phone;
+
     public $pharmacy_email;
+
     public $pharmacy_address;
+
     public $pharmacy_tax_id;
+
     public $pharmacy_website;
 
     public function mount(): void
@@ -74,8 +98,10 @@ class Settings extends Page implements HasForms
         $this->currency_symbol = Setting::get('currency_symbol', '$');
         $this->tax_rate = Setting::get('tax_rate', '10');
         $this->receipt_footer = Setting::get('receipt_footer', 'Thank you for your business!');
+        $this->receipt_paybill = Setting::get('receipt_paybill', '');
+        $this->receipt_paybill_account = Setting::get('receipt_paybill_account', '');
         $this->low_stock_threshold = Setting::get('low_stock_threshold', '10');
-        
+
         // Load M-Pesa enabled setting and ensure it's a boolean
         $mpesaEnabledValue = Setting::get('mpesa_enabled', false);
         $this->mpesa_enabled = filter_var($mpesaEnabledValue, FILTER_VALIDATE_BOOLEAN);
@@ -85,13 +111,13 @@ class Settings extends Page implements HasForms
         $this->mpesa_passkey = Setting::get('mpesa_passkey', '');
         $this->mpesa_shortcode = Setting::get('mpesa_shortcode', '');
         $this->mpesa_environment = Setting::get('mpesa_environment', 'sandbox');
-        
+
         // Load Bank Paybill Settings
         $this->payment_type = Setting::get('payment_type', 'mpesa');
         $this->bank_code = Setting::get('bank_code', 'kcb');
         $this->bank_account_number = Setting::get('bank_account_number', '');
         // Removed: account_reference_type - now always uses bank_account_number from settings
-        
+
         // Load SMS Settings
         $smsEnabledValue = Setting::get('sms_enabled', false);
         $this->sms_enabled = filter_var($smsEnabledValue, FILTER_VALIDATE_BOOLEAN);
@@ -99,7 +125,7 @@ class Settings extends Page implements HasForms
         $this->sms_api_key = Setting::get('sms_api_key', '');
         $this->sms_sender_id = Setting::get('sms_sender_id', '');
         $this->sms_notification_phone = Setting::get('sms_notification_phone', '');
-        
+
         // Load Pharmacy Information
         $this->pharmacy_name = Setting::get('pharmacy_name', 'Symphony Pharmacy');
         $this->pharmacy_phone = Setting::get('pharmacy_phone', '');
@@ -129,7 +155,7 @@ class Settings extends Page implements HasForms
                                             ->required()
                                             ->helperText('This name will appear on receipts and invoices')
                                             ->columnSpanFull(),
-                                        
+
                                         TextInput::make('pharmacy_phone')
                                             ->label('Phone Number')
                                             ->placeholder('e.g., +254 712 345 678')
@@ -137,7 +163,7 @@ class Settings extends Page implements HasForms
                                             ->maxLength(20)
                                             ->helperText('Business contact phone number')
                                             ->columnSpan(1),
-                                        
+
                                         TextInput::make('pharmacy_email')
                                             ->label('Email Address')
                                             ->placeholder('e.g., info@symphonypharmacy.com')
@@ -145,21 +171,21 @@ class Settings extends Page implements HasForms
                                             ->maxLength(255)
                                             ->helperText('Business contact email')
                                             ->columnSpan(1),
-                                        
+
                                         TextInput::make('pharmacy_address')
                                             ->label('Physical Address')
                                             ->placeholder('e.g., 123 Main Street, Nairobi, Kenya')
                                             ->maxLength(500)
                                             ->helperText('Full business address')
                                             ->columnSpanFull(),
-                                        
+
                                         TextInput::make('pharmacy_tax_id')
                                             ->label('Tax ID / Registration Number')
                                             ->placeholder('e.g., P051234567A')
                                             ->maxLength(100)
                                             ->helperText('Business registration or tax identification number')
                                             ->columnSpan(1),
-                                        
+
                                         TextInput::make('pharmacy_website')
                                             ->label('Website (Optional)')
                                             ->placeholder('e.g., https://www.symphonypharmacy.com')
@@ -169,7 +195,7 @@ class Settings extends Page implements HasForms
                                             ->columnSpan(1),
                                     ])
                                     ->columns(2),
-                                
+
                                 Section::make('Usage Information')
                                     ->schema([
                                         Placeholder::make('usage_info')
@@ -186,7 +212,7 @@ class Settings extends Page implements HasForms
                                     ->collapsed()
                                     ->icon('heroicon-o-information-circle'),
                             ]),
-                        
+
                         Tabs\Tab::make('General Settings')
                             ->icon('heroicon-o-cog-6-tooth')
                             ->schema([
@@ -208,7 +234,7 @@ class Settings extends Page implements HasForms
                                             ->required()
                                             ->searchable()
                                             ->columnSpanFull(),
-                                        
+
                                         TextInput::make('currency_symbol')
                                             ->label('Currency Symbol')
                                             ->default('$')
@@ -216,7 +242,7 @@ class Settings extends Page implements HasForms
                                             ->maxLength(5)
                                             ->placeholder('e.g., $, KSh, £')
                                             ->columnSpan(1),
-                                        
+
                                         TextInput::make('tax_rate')
                                             ->label('Tax Rate (%)')
                                             ->numeric()
@@ -254,7 +280,22 @@ class Settings extends Page implements HasForms
                                             ->maxLength(500)
                                             ->columnSpanFull()
                                             ->helperText('This message will appear at the bottom of receipts'),
-                                    ]),
+
+                                        TextInput::make('receipt_paybill')
+                                            ->label('Paybill / Till number')
+                                            ->placeholder('e.g., 123456')
+                                            ->maxLength(30)
+                                            ->columnSpan(1)
+                                            ->helperText('Shown on thermal and POS receipts when filled.'),
+
+                                        TextInput::make('receipt_paybill_account')
+                                            ->label('Account (optional)')
+                                            ->placeholder('e.g., business account for Lipa na M-Pesa')
+                                            ->maxLength(50)
+                                            ->columnSpan(1)
+                                            ->helperText('Optional second line under paybill on receipts.'),
+                                    ])
+                                    ->columns(2),
                             ]),
 
                         Tabs\Tab::make('Payment Settings')
@@ -276,7 +317,7 @@ class Settings extends Page implements HasForms
                                             ->helperText('Choose whether to use M-Pesa or Bank Paybill for STK Push payments')
                                             ->columnSpanFull(),
                                     ]),
-                                
+
                                 Section::make('M-Pesa Configuration')
                                     ->description('Configure M-Pesa payment gateway integration')
                                     ->icon('heroicon-o-credit-card')
@@ -287,7 +328,7 @@ class Settings extends Page implements HasForms
                                             ->default(false)
                                             ->helperText('Turn on to accept M-Pesa payments')
                                             ->columnSpanFull(),
-                                        
+
                                         Select::make('mpesa_environment')
                                             ->label('Environment')
                                             ->options([
@@ -298,7 +339,7 @@ class Settings extends Page implements HasForms
                                             ->required()
                                             ->columnSpanFull(),
                                     ]),
-                                
+
                                 Section::make('Bank Paybill Configuration')
                                     ->description('Configure Bank Paybill STK Push settings')
                                     ->icon('heroicon-o-building-library')
@@ -318,7 +359,7 @@ class Settings extends Page implements HasForms
                                             ->required()
                                             ->helperText('Select the bank for paybill payments')
                                             ->columnSpanFull(),
-                                        
+
                                         TextInput::make('bank_account_number')
                                             ->label('Business Account Number / Phone Number')
                                             ->placeholder('Enter your business account number or phone number')
@@ -337,14 +378,14 @@ class Settings extends Page implements HasForms
                                             ->placeholder('e.g., 123456')
                                             ->maxLength(20)
                                             ->columnSpan(1),
-                                        
+
                                         TextInput::make('mpesa_shortcode')
                                             ->label('Shortcode')
                                             ->placeholder('e.g., 174379')
                                             ->maxLength(20)
                                             ->helperText('Your M-Pesa business shortcode')
                                             ->columnSpan(1),
-                                        
+
                                         TextInput::make('mpesa_consumer_key')
                                             ->label('Consumer Key')
                                             ->placeholder('Enter your consumer key')
@@ -352,7 +393,7 @@ class Settings extends Page implements HasForms
                                             ->revealable()
                                             ->maxLength(255)
                                             ->columnSpanFull(),
-                                        
+
                                         TextInput::make('mpesa_consumer_secret')
                                             ->label('Consumer Secret')
                                             ->placeholder('Enter your consumer secret')
@@ -360,7 +401,7 @@ class Settings extends Page implements HasForms
                                             ->revealable()
                                             ->maxLength(255)
                                             ->columnSpanFull(),
-                                        
+
                                         TextInput::make('mpesa_passkey')
                                             ->label('Passkey')
                                             ->placeholder('Enter your passkey')
@@ -402,7 +443,7 @@ class Settings extends Page implements HasForms
                                             ->default(false)
                                             ->helperText('Turn on to enable SMS notifications for low stock alerts')
                                             ->columnSpanFull(),
-                                        
+
                                         Select::make('sms_provider')
                                             ->label('SMS Provider')
                                             ->options([
@@ -410,7 +451,7 @@ class Settings extends Page implements HasForms
                                             ])
                                             ->default('blessed_text')
                                             ->required()
-                                            ->disabled(fn ($get) => !$get('sms_enabled'))
+                                            ->disabled(fn ($get) => ! $get('sms_enabled'))
                                             ->helperText('Select your SMS service provider')
                                             ->columnSpanFull(),
                                     ]),
@@ -427,16 +468,16 @@ class Settings extends Page implements HasForms
                                             ->revealable()
                                             ->maxLength(255)
                                             ->required(fn ($get) => $get('sms_enabled'))
-                                            ->disabled(fn ($get) => !$get('sms_enabled'))
+                                            ->disabled(fn ($get) => ! $get('sms_enabled'))
                                             ->helperText('Get your API key from your Blessed Text profile')
                                             ->columnSpanFull(),
-                                        
+
                                         TextInput::make('sms_sender_id')
                                             ->label('Sender ID')
                                             ->placeholder('e.g., 23107')
                                             ->maxLength(20)
                                             ->required(fn ($get) => $get('sms_enabled'))
-                                            ->disabled(fn ($get) => !$get('sms_enabled'))
+                                            ->disabled(fn ($get) => ! $get('sms_enabled'))
                                             ->helperText('This must be a sender ID already assigned to you')
                                             ->columnSpanFull(),
                                     ]),
@@ -450,7 +491,7 @@ class Settings extends Page implements HasForms
                                             ->placeholder('e.g., 254721XXXXXX or 0721XXXXXX')
                                             ->maxLength(20)
                                             ->required(fn ($get) => $get('sms_enabled'))
-                                            ->disabled(fn ($get) => !$get('sms_enabled'))
+                                            ->disabled(fn ($get) => ! $get('sms_enabled'))
                                             ->helperText('Phone number to receive low stock alerts. Can be in format: 254721XXXXXX, 0721XXXXXX, or 721XXXXXX')
                                             ->columnSpanFull(),
                                     ]),
@@ -480,7 +521,7 @@ class Settings extends Page implements HasForms
                     ->activeTab(1),
             ]);
     }
-    
+
     public function save(): void
     {
         try {
@@ -489,11 +530,13 @@ class Settings extends Page implements HasForms
             Setting::set('currency_symbol', $this->currency_symbol, 'general');
             Setting::set('tax_rate', $this->tax_rate, 'general');
             Setting::set('receipt_footer', $this->receipt_footer, 'general');
+            Setting::set('receipt_paybill', $this->receipt_paybill ?? '', 'general');
+            Setting::set('receipt_paybill_account', $this->receipt_paybill_account ?? '', 'general');
             Setting::set('low_stock_threshold', $this->low_stock_threshold, 'general');
 
             // Save Payment Type
             Setting::set('payment_type', $this->payment_type ?? 'mpesa', 'payment');
-            
+
             // Save M-Pesa Settings
             // Ensure boolean value is properly saved (cast to int then string for database storage)
             $mpesaEnabled = filter_var($this->mpesa_enabled ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -504,12 +547,12 @@ class Settings extends Page implements HasForms
             Setting::set('mpesa_passkey', $this->mpesa_passkey ?? '', 'mpesa');
             Setting::set('mpesa_shortcode', $this->mpesa_shortcode ?? '', 'mpesa');
             Setting::set('mpesa_environment', $this->mpesa_environment ?? 'sandbox', 'mpesa');
-            
+
             // Save Bank Paybill Settings
             Setting::set('bank_code', $this->bank_code ?? 'kcb', 'bank_paybill');
             Setting::set('bank_account_number', $this->bank_account_number ?? '', 'bank_paybill');
             // Removed: account_reference_type - now always uses bank_account_number from settings
-            
+
             // Save SMS Settings
             $smsEnabled = filter_var($this->sms_enabled ?? false, FILTER_VALIDATE_BOOLEAN);
             Setting::set('sms_enabled', $smsEnabled ? '1' : '0', 'sms');
@@ -517,7 +560,7 @@ class Settings extends Page implements HasForms
             Setting::set('sms_api_key', $this->sms_api_key ?? '', 'sms');
             Setting::set('sms_sender_id', $this->sms_sender_id ?? '', 'sms');
             Setting::set('sms_notification_phone', $this->sms_notification_phone ?? '', 'sms');
-            
+
             // Save Pharmacy Information
             Setting::set('pharmacy_name', $this->pharmacy_name ?? 'Symphony Pharmacy', 'pharmacy');
             Setting::set('pharmacy_phone', $this->pharmacy_phone ?? '', 'pharmacy');
@@ -540,15 +583,14 @@ class Settings extends Page implements HasForms
                 ->danger()
                 ->body('Please check all required fields.')
                 ->send();
-            
+
             throw $e;
         } catch (\Exception $e) {
             Notification::make()
                 ->title('Error Saving Settings')
                 ->danger()
-                ->body('An error occurred while saving settings: ' . $e->getMessage())
+                ->body('An error occurred while saving settings: '.$e->getMessage())
                 ->send();
         }
     }
 }
-

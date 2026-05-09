@@ -18,8 +18,10 @@ class SettingSeeder extends Seeder
             ['key' => 'currency_symbol', 'value' => 'KSh', 'group' => 'general'],
             ['key' => 'tax_rate', 'value' => '16', 'group' => 'general'],
             ['key' => 'receipt_footer', 'value' => 'Thank you for choosing Symphony Pharmacy. Your health is our priority!', 'group' => 'general'],
+            ['key' => 'receipt_paybill', 'value' => '', 'group' => 'general'],
+            ['key' => 'receipt_paybill_account', 'value' => '', 'group' => 'general'],
             ['key' => 'low_stock_threshold', 'value' => '10', 'group' => 'general'],
-            
+
             // M-Pesa Settings
             ['key' => 'mpesa_enabled', 'value' => false, 'group' => 'mpesa'],
             ['key' => 'mpesa_paybill', 'value' => '', 'group' => 'mpesa'],
@@ -38,4 +40,3 @@ class SettingSeeder extends Seeder
         }
     }
 }
-

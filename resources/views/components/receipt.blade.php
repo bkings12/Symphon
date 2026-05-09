@@ -12,6 +12,8 @@
             $pharmacyPhone = $pharmacy?->phone ?? setting('pharmacy_phone', '');
             $pharmacyAddress = $pharmacy?->address ?? setting('pharmacy_address', '');
             $pharmacyTaxId = $pharmacy?->tax_id ?? setting('pharmacy_tax_id', 'N/A');
+            $receiptPaybill = trim((string) setting('receipt_paybill', ''));
+            $receiptPaybillAccount = trim((string) setting('receipt_paybill_account', ''));
         @endphp
         <h2 style="margin: 0; font-size: 1.5rem; font-weight: bold; color: #000 !important;">{{ $pharmacyName }}</h2>
         @if($pharmacyAddress)
@@ -24,6 +26,12 @@
             <p style="margin: 0.25rem 0; font-size: 0.875rem; color: #000 !important;">Email: {{ $pharmacyEmail }}</p>
         @endif
         <p style="margin: 0.5rem 0 0 0; font-size: 0.75rem; color: #666 !important;">TAX ID: {{ $pharmacyTaxId }}</p>
+        @if($receiptPaybill !== '')
+            <p style="margin: 0.35rem 0 0 0; font-size: 0.8125rem; font-weight: bold; color: #000 !important;">Paybill: {{ $receiptPaybill }}</p>
+            @if($receiptPaybillAccount !== '')
+                <p style="margin: 0.15rem 0 0 0; font-size: 0.75rem; color: #000 !important;">A/C: {{ $receiptPaybillAccount }}</p>
+            @endif
+        @endif
     </div>
 
     <!-- Transaction Details -->
@@ -99,9 +107,9 @@
             <span style="color: #000 !important;">Tax ({{ tax_rate() }}%):</span>
             <span style="color: #000 !important;">{{ format_currency($sale->tax_amount) }}</span>
         </div>
-        <div style="display: flex; justify-content: space-between; padding-top: 0.75rem; border-top: 2px solid #333; font-size: 1.25rem; font-weight: bold;">
-            <span style="color: #000 !important;">TOTAL:</span>
-            <span style="color: #000 !important;">{{ format_currency($sale->total_amount) }}</span>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; padding-top: 0.75rem; border-top: 2px solid #333; font-size: 0.9375rem; font-weight: bold; flex-wrap: nowrap;">
+            <span style="color: #000 !important; flex-shrink: 0;">TOTAL:</span>
+            <span style="color: #000 !important; text-align: right; min-width: 0;">{{ format_currency($sale->total_amount) }}</span>
         </div>
     </div>
 

@@ -107,6 +107,16 @@ class ThermalPrinterService
 
             $taxId = $pharmacy?->tax_id ?? setting('pharmacy_tax_id', 'N/A');
             $this->printer->text('TAX ID: '.$taxId."\n");
+
+            $receiptPaybill = trim((string) setting('receipt_paybill', ''));
+            if ($receiptPaybill !== '') {
+                $this->printer->text('Paybill: '.$receiptPaybill."\n");
+                $account = trim((string) setting('receipt_paybill_account', ''));
+                if ($account !== '') {
+                    $this->printer->text('A/C: '.$account."\n");
+                }
+            }
+
             $this->printer->feed();
 
             // Divider
@@ -163,9 +173,7 @@ class ThermalPrinterService
 
             $this->printer->feed();
             $this->printer->setEmphasis(true);
-            $this->printer->setTextSize(2, 2);
-            $this->printer->text(sprintf("%-20s %12s\n", 'TOTAL:', format_currency($sale->total_amount)));
-            $this->printer->setTextSize(1, 1);
+            $this->printer->text(sprintf("%-32s %12s\n", 'TOTAL:', format_currency($sale->total_amount)));
             $this->printer->setEmphasis(false);
 
             $this->printer->feed();
