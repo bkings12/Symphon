@@ -3,11 +3,13 @@
 namespace App\Filament\Resources\Sales\Tables;
 
 use App\Helpers\SettingsHelper;
+use App\Models\Sale;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class SalesTable
 {
@@ -30,8 +32,19 @@ class SalesTable
                     ->label('Date & Time'),
                 \Filament\Tables\Columns\TextColumn::make('items_count')
                     ->counts('items')
-                    ->label('Items')
+                    ->label('# lines')
                     ->sortable(),
+                \Filament\Tables\Columns\TextColumn::make('items_sold')
+                    ->label('Items sold')
+                    ->getStateUsing(function (Sale $record): string {
+                        $summary = $record->items
+                            ->map(fn ($item) => ($item->medicine?->name ?? '?').' (×'.$item->quantity.')')
+                            ->implode(', ');
+
+                        return Str::limit($summary, 120);
+                    })
+                    ->wrap()
+                    ->toggleable(),
                 \Filament\Tables\Columns\TextColumn::make('total_amount')
                     ->formatStateUsing(fn ($state) => SettingsHelper::formatCurrency($state))
                     ->sortable()

@@ -148,3 +148,4 @@ For issues or questions, check the documentation files:
 - Keep your `.env` file secure and never commit it
 - Default pharmacies are created by the seeder for convenience
 
+

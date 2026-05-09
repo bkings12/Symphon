@@ -973,7 +973,7 @@
                     @else
                         <div class="pos-cart-items">
                             @foreach($cart as $index => $item)
-                                <div class="pos-cart-item">
+                                <div class="pos-cart-item" wire:key="pos-cart-line-{{ $item['medicine_id'] }}">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                                         <div style="flex: 1;">
                                             <p class="pos-cart-item-name">{{ $item['name'] }}</p>
@@ -988,6 +988,28 @@
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                             </svg>
                                         </button>
+                                    </div>
+                                    <div style="margin-bottom: 0.875rem;">
+                                        <label class="pos-label" style="font-size: 0.75rem; margin-bottom: 0.35rem; display: block;">Spend amount → quantity ({{ $item['unit'] ?? 'units' }})</label>
+                                        <div style="display: flex; gap: 0.5rem; align-items: stretch;">
+                                            <input
+                                                type="number"
+                                                wire:model="lineSpendByMedicine.{{ $item['medicine_id'] }}"
+                                                step="0.01"
+                                                min="0.01"
+                                                class="pos-input"
+                                                style="flex: 1; padding: 0.5rem 0.65rem; font-size: 0.9375rem;"
+                                                placeholder="{{ currency_symbol() }}…"
+                                            >
+                                            <button
+                                                type="button"
+                                                wire:click="setQuantityFromMoneyAmount({{ $index }})"
+                                                style="white-space: nowrap; padding: 0.5rem 0.75rem; font-size: 0.8125rem; font-weight: 700; border-radius: 0.5rem; border: none; cursor: pointer; background: var(--gray-800); color: white;"
+                                            >Apply</button>
+                                        </div>
+                                        <p style="font-size: 0.6875rem; color: var(--gray-500); margin: 0.35rem 0 0; line-height: 1.35;">
+                                            Uses line unit price before cart tax; rounds down to whole {{ $item['unit'] ?? 'units' }}; capped by stock.
+                                        </p>
                                     </div>
                                     <div style="display: flex; align-items: center; justify-content: space-between;">
                                         <div style="display: flex; align-items: center; gap: 0.75rem;">

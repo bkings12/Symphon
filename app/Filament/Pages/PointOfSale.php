@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Concerns\ComputesCartQuantityFromMoneyAmount;
 use App\Helpers\SettingsHelper;
 use App\Models\Customer;
 use App\Models\Medicine;
@@ -20,6 +21,8 @@ use UnitEnum;
 
 class PointOfSale extends Page
 {
+    use ComputesCartQuantityFromMoneyAmount;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingCart;
 
     protected string $view = 'filament.pages.point-of-sale';
@@ -32,50 +35,80 @@ class PointOfSale extends Page
 
     // Search
     public $search = '';
+
     public $searchResults = [];
+
     public $showSearchResults = false;
 
     // Cart
     public $cart = [];
+
     public $cartTotal = 0;
+
     public $cartSubtotal = 0;
+
     public $taxRate = 0;
+
     public $taxAmount = 0;
+
     public $discountAmount = 0;
+
     public $discountType = 'fixed'; // 'fixed' or 'percentage'
+
     public $discountValue = 0;
 
     // Customer
     public $customerId = null;
+
     public $customerSearch = '';
+
     public $customerResults = [];
+
     public $selectedCustomer = null;
 
     // Payment
     public $paymentMethod = 'cash';
+
     public $amountPaid = 0;
+
     public $change = 0;
+
     public $mpesaPhoneNumber = '';
+
     public $stkPhoneNumber = ''; // Alias for compatibility with PosComponent view
+
     public $mpesaProcessing = false;
+
     public $stkProcessing = false; // Alias for compatibility with PosComponent view
+
     public $mpesaStatus = null; // 'pending', 'success', 'failed'
+
     public $stkStatus = null; // Alias for compatibility with PosComponent view
+
     public $pendingMpesaSaleId = null; // Store sale ID for polling
+
     public $pendingStkSaleId = null; // Alias for compatibility with PosComponent view
+
     public $pendingStkCheckoutId = null; // For STK Push status polling
 
     // UI State
     public $showCustomerModal = false;
+
     public $showPaymentModal = false;
+
     public $showPhoneModal = false;
+
     public $processingSale = false;
+
     public $showReceiptModal = false;
-    
+
     // Receipt Data
     public $lastSale = null;
+
     public $lastSaleItems = [];
+
     public $lastCustomer = null;
+
     public $lastPayment = null;
 
     protected $listeners = ['scanBarcode', 'clearCart'];
@@ -105,7 +138,7 @@ class PointOfSale extends Page
     {
         if (strlen($this->search) >= 2) {
             $this->searchMedicines();
-        } else if (strlen($this->search) === 0) {
+        } elseif (strlen($this->search) === 0) {
             // Show default medicines when search is empty
             $this->loadDefaultMedicines();
         } else {
@@ -118,10 +151,10 @@ class PointOfSale extends Page
     {
         $query = Medicine::where('is_active', true)
             ->where(function ($q) {
-                $q->where('name', 'like', '%' . $this->search . '%')
-                    ->orWhere('generic_name', 'like', '%' . $this->search . '%')
-                    ->orWhere('barcode', 'like', '%' . $this->search . '%')
-                    ->orWhere('sku', 'like', '%' . $this->search . '%');
+                $q->where('name', 'like', '%'.$this->search.'%')
+                    ->orWhere('generic_name', 'like', '%'.$this->search.'%')
+                    ->orWhere('barcode', 'like', '%'.$this->search.'%')
+                    ->orWhere('sku', 'like', '%'.$this->search.'%');
             })
             ->where('stock_quantity', '>', 0)
             ->limit(10)
@@ -172,7 +205,7 @@ class PointOfSale extends Page
     {
         $this->search = $barcode;
         $this->searchMedicines();
-        
+
         if (count($this->searchResults) === 1) {
             $this->addToCart($this->searchResults[0]['id']);
         }
@@ -182,9 +215,10 @@ class PointOfSale extends Page
     {
         try {
             $medicine = Medicine::find($medicineId);
-            
-            if (!$medicine || $medicine->stock_quantity <= 0) {
+
+            if (! $medicine || $medicine->stock_quantity <= 0) {
                 $this->dispatch('notify', message: 'Medicine not available or out of stock', type: 'error');
+
                 return;
             }
 
@@ -214,10 +248,10 @@ class PointOfSale extends Page
             $this->search = '';
             $this->searchResults = [];
             $this->showSearchResults = false;
-            $this->dispatch('notify', message: $medicine->name . ' added to cart', type: 'success');
+            $this->dispatch('notify', message: $medicine->name.' added to cart', type: 'success');
             $this->dispatch('focus-search');
         } catch (\Exception $e) {
-            $this->dispatch('notify', message: 'Error: ' . $e->getMessage(), type: 'error');
+            $this->dispatch('notify', message: 'Error: '.$e->getMessage(), type: 'error');
         }
     }
 
@@ -232,11 +266,13 @@ class PointOfSale extends Page
     {
         if ($quantity <= 0) {
             $this->removeFromCart($index);
+
             return;
         }
 
         if ($quantity > $this->cart[$index]['stock_available']) {
             $this->dispatch('notify', message: 'Insufficient stock available', type: 'error');
+
             return;
         }
 
@@ -279,15 +315,15 @@ class PointOfSale extends Page
 
     public function updatedAmountPaid()
     {
-        $this->change = max(0, (float)$this->amountPaid - (float)$this->cartTotal);
+        $this->change = max(0, (float) $this->amountPaid - (float) $this->cartTotal);
     }
 
     public function updatedCustomerSearch()
     {
         if (strlen($this->customerSearch) >= 2) {
-            $this->customerResults = Customer::where('name', 'like', '%' . $this->customerSearch . '%')
-                ->orWhere('phone', 'like', '%' . $this->customerSearch . '%')
-                ->orWhere('email', 'like', '%' . $this->customerSearch . '%')
+            $this->customerResults = Customer::where('name', 'like', '%'.$this->customerSearch.'%')
+                ->orWhere('phone', 'like', '%'.$this->customerSearch.'%')
+                ->orWhere('email', 'like', '%'.$this->customerSearch.'%')
                 ->limit(10)
                 ->get()
                 ->map(function ($customer) {
@@ -330,13 +366,14 @@ class PointOfSale extends Page
     {
         if (empty($this->cart)) {
             $this->dispatch('notify', message: 'Cart is empty', type: 'error');
+
             return;
         }
 
         $this->amountPaid = $this->cartTotal;
         $this->change = 0;
         // Only set phone number if customer has one, otherwise keep it empty
-        if ($this->selectedCustomer && isset($this->selectedCustomer['phone']) && !empty($this->selectedCustomer['phone'])) {
+        if ($this->selectedCustomer && isset($this->selectedCustomer['phone']) && ! empty($this->selectedCustomer['phone'])) {
             $this->mpesaPhoneNumber = $this->selectedCustomer['phone'];
             $this->stkPhoneNumber = $this->selectedCustomer['phone'];
         } else {
@@ -348,12 +385,12 @@ class PointOfSale extends Page
         $this->showPhoneModal = false;
         $this->showPaymentModal = true;
     }
-    
+
     public function updatedPaymentMethod()
     {
         if ($this->paymentMethod === 'mpesa' || $this->paymentMethod === 'bank_paybill') {
             // Pre-fill phone number if customer is selected, otherwise leave empty
-            if ($this->selectedCustomer && isset($this->selectedCustomer['phone']) && !empty($this->selectedCustomer['phone'])) {
+            if ($this->selectedCustomer && isset($this->selectedCustomer['phone']) && ! empty($this->selectedCustomer['phone'])) {
                 $this->mpesaPhoneNumber = $this->selectedCustomer['phone'];
                 $this->stkPhoneNumber = $this->selectedCustomer['phone'];
             } else {
@@ -391,84 +428,90 @@ class PointOfSale extends Page
     {
         if (empty($this->cart)) {
             $this->dispatch('notify', message: 'Cart is empty', type: 'error');
+
             return;
         }
 
         // Check for M-Pesa or Bank Paybill payment method FIRST
-        $currentPaymentMethod = trim((string)$this->paymentMethod);
+        $currentPaymentMethod = trim((string) $this->paymentMethod);
         $paymentMethodLower = strtolower($currentPaymentMethod);
-        
+
         if ($paymentMethodLower === 'mpesa' || $paymentMethodLower === 'bank_paybill') {
             // Route to STK Push payment processing (both M-Pesa and Bank Paybill)
             $this->updateCartTotals();
-            
+
             // Validate cartTotal is NOT the phone number
-            if ((isset($this->mpesaPhoneNumber) && 
-                ($this->cartTotal == $this->mpesaPhoneNumber || 
-                 (string)$this->cartTotal === (string)$this->mpesaPhoneNumber)) ||
-                (isset($this->stkPhoneNumber) && 
-                ($this->cartTotal == $this->stkPhoneNumber || 
-                 (string)$this->cartTotal === (string)$this->stkPhoneNumber)) ||
-                 !is_numeric($this->cartTotal)) {
+            if ((isset($this->mpesaPhoneNumber) &&
+                ($this->cartTotal == $this->mpesaPhoneNumber ||
+                 (string) $this->cartTotal === (string) $this->mpesaPhoneNumber)) ||
+                (isset($this->stkPhoneNumber) &&
+                ($this->cartTotal == $this->stkPhoneNumber ||
+                 (string) $this->cartTotal === (string) $this->stkPhoneNumber)) ||
+                 ! is_numeric($this->cartTotal)) {
                 $this->dispatch('notify', message: 'Error: Cart total is invalid. Please refresh the page.', type: 'error');
+
                 return;
             }
-            
+
             $this->processMpesaPayment();
+
             return;
         }
 
         // Recalculate cart totals
         $this->updateCartTotals();
-        
+
         // Calculate amount directly from cart to avoid property corruption
         $calculatedSubtotal = collect($this->cart)->sum(function ($item) {
-            return (float)$item['selling_price'] * (int)$item['quantity'];
+            return (float) $item['selling_price'] * (int) $item['quantity'];
         });
-        
+
         $calculatedDiscount = 0;
         if ($this->discountValue > 0) {
             if ($this->discountType === 'percentage') {
-                $calculatedDiscount = ($calculatedSubtotal * (float)$this->discountValue) / 100;
+                $calculatedDiscount = ($calculatedSubtotal * (float) $this->discountValue) / 100;
             } else {
-                $calculatedDiscount = min((float)$this->discountValue, $calculatedSubtotal);
+                $calculatedDiscount = min((float) $this->discountValue, $calculatedSubtotal);
             }
         }
-        
+
         $taxableAmount = $calculatedSubtotal - $calculatedDiscount;
-        $calculatedTax = $taxableAmount * (float)$this->taxRate;
+        $calculatedTax = $taxableAmount * (float) $this->taxRate;
         $calculatedTotal = $taxableAmount + $calculatedTax;
-        
+
         // Validate calculated total
-        if (!is_numeric($calculatedTotal) || $calculatedTotal <= 0) {
+        if (! is_numeric($calculatedTotal) || $calculatedTotal <= 0) {
             $this->dispatch('notify', message: 'Invalid cart total. Please refresh and try again.', type: 'error');
-            return;
-        }
-        
-        // CRITICAL: Ensure calculated total is NOT the phone number
-        if (isset($this->mpesaPhoneNumber) && 
-            ($calculatedTotal == $this->mpesaPhoneNumber || 
-             (string)$calculatedTotal === (string)$this->mpesaPhoneNumber)) {
-            $this->dispatch('notify', message: 'Error: Cart total is invalid. Please refresh the page.', type: 'error');
+
             return;
         }
 
-        if ((float)$this->amountPaid < (float)$calculatedTotal) {
+        // CRITICAL: Ensure calculated total is NOT the phone number
+        if (isset($this->mpesaPhoneNumber) &&
+            ($calculatedTotal == $this->mpesaPhoneNumber ||
+             (string) $calculatedTotal === (string) $this->mpesaPhoneNumber)) {
+            $this->dispatch('notify', message: 'Error: Cart total is invalid. Please refresh the page.', type: 'error');
+
+            return;
+        }
+
+        if ((float) $this->amountPaid < (float) $calculatedTotal) {
             $this->dispatch('notify', message: 'Insufficient payment amount', type: 'error');
+
             return;
         }
 
         $this->processingSale = true;
 
         $saleData = null;
-        
+
         try {
             $saleData = DB::transaction(function () use ($calculatedSubtotal, $calculatedTax, $calculatedDiscount, $calculatedTotal) {
                 $user = Auth::user();
                 $pharmacy = $user->pharmacy ?? Pharmacy::first();
 
                 // Generate invoice number
-                $invoiceNumber = 'SAL-POS-' . str_pad(Sale::max('id') + 1 ?? 1, 6, '0', STR_PAD_LEFT);
+                $invoiceNumber = 'SAL-POS-'.str_pad(Sale::max('id') + 1 ?? 1, 6, '0', STR_PAD_LEFT);
 
                 // Create sale using calculated values
                 $sale = Sale::create([
@@ -489,8 +532,8 @@ class PointOfSale extends Page
                 // Create sale items and update stock
                 foreach ($this->cart as $cartItem) {
                     $medicine = Medicine::find($cartItem['medicine_id']);
-                    
-                    if (!$medicine || $medicine->stock_quantity < $cartItem['quantity']) {
+
+                    if (! $medicine || $medicine->stock_quantity < $cartItem['quantity']) {
                         throw new \Exception("Insufficient stock for {$medicine->name}");
                     }
 
@@ -514,26 +557,26 @@ class PointOfSale extends Page
                 }
 
                 // Create payment - use sale's total_amount, not amountPaid
-                $paymentAmount = (float)$sale->total_amount;
-                
+                $paymentAmount = (float) $sale->total_amount;
+
                 // CRITICAL: Validate payment amount is NOT the phone number
-                if (isset($this->mpesaPhoneNumber) && 
-                    ($paymentAmount == $this->mpesaPhoneNumber || 
-                     (string)$paymentAmount === (string)$this->mpesaPhoneNumber)) {
-                    throw new \Exception('Payment amount matches phone number! Amount: ' . $paymentAmount . ', Phone: ' . $this->mpesaPhoneNumber);
+                if (isset($this->mpesaPhoneNumber) &&
+                    ($paymentAmount == $this->mpesaPhoneNumber ||
+                     (string) $paymentAmount === (string) $this->mpesaPhoneNumber)) {
+                    throw new \Exception('Payment amount matches phone number! Amount: '.$paymentAmount.', Phone: '.$this->mpesaPhoneNumber);
                 }
-                
+
                 // Ensure payment method is not mpesa
-                $paymentMethod = trim((string)$this->paymentMethod);
+                $paymentMethod = trim((string) $this->paymentMethod);
                 if (strtolower($paymentMethod) === 'mpesa') {
                     throw new \Exception('M-Pesa payment should not use regular payment flow');
                 }
-                
+
                 $payment = Payment::create([
                     'sale_id' => $sale->id,
                     'payment_method' => $paymentMethod,
                     'amount' => $paymentAmount,
-                    'reference_number' => 'PAY-' . strtoupper(uniqid()),
+                    'reference_number' => 'PAY-'.strtoupper(uniqid()),
                     'notes' => 'POS Payment',
                     'status' => 'completed',
                 ]);
@@ -554,15 +597,15 @@ class PointOfSale extends Page
             $this->showPaymentModal = false;
             $this->processingSale = false;
             $this->showReceiptModal = true;
-            
+
             // Reset cart
             $this->resetCart();
-            
+
             $this->dispatch('notify', message: 'Sale completed successfully!', type: 'success');
-            
+
         } catch (\Exception $e) {
             $this->processingSale = false;
-            $this->dispatch('notify', message: 'Error processing sale: ' . $e->getMessage(), type: 'error');
+            $this->dispatch('notify', message: 'Error processing sale: '.$e->getMessage(), type: 'error');
         }
     }
 
@@ -571,12 +614,14 @@ class PointOfSale extends Page
         // Validate phone number
         if (empty(trim($this->mpesaPhoneNumber))) {
             $this->dispatch('notify', message: 'Please enter M-Pesa phone number', type: 'error');
+
             return;
         }
 
         // Validate phone number format
-        if (!validate_phone_number($this->mpesaPhoneNumber)) {
+        if (! validate_phone_number($this->mpesaPhoneNumber)) {
             $this->dispatch('notify', message: 'Invalid phone number format. Use 07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX', type: 'error');
+
             return;
         }
 
@@ -589,25 +634,28 @@ class PointOfSale extends Page
     {
         // Get phone number - check both properties
         $phoneNumber = trim($this->stkPhoneNumber ?? $this->mpesaPhoneNumber ?? '');
-        
+
         // Validate phone number - show modal if empty
         if (empty($phoneNumber)) {
             $this->showPhoneModal = true;
+
             return;
         }
 
         // Validate phone number format
-        if (!validate_phone_number($phoneNumber)) {
+        if (! validate_phone_number($phoneNumber)) {
             $this->dispatch('notify', message: 'Invalid phone number format. Use 07XXXXXXXX, 0111XXXXXX, or 254XXXXXXXXX', type: 'error');
+
             return;
         }
 
         // Recalculate cart totals
         $this->updateCartTotals();
-        
+
         // Ensure cartTotal is valid
-        if (!is_numeric($this->cartTotal) || $this->cartTotal <= 0) {
+        if (! is_numeric($this->cartTotal) || $this->cartTotal <= 0) {
             $this->dispatch('notify', message: 'Invalid cart total. Please refresh and try again.', type: 'error');
+
             return;
         }
 
@@ -615,8 +663,9 @@ class PointOfSale extends Page
         $phoneNumber = format_phone_number($phoneNumber);
 
         // Check if M-Pesa is enabled (required for both M-Pesa and Bank Paybill)
-        if (!SettingsHelper::isMpesaEnabled()) {
+        if (! SettingsHelper::isMpesaEnabled()) {
             $this->dispatch('notify', message: 'M-Pesa payments are not enabled. Please configure in settings.', type: 'error');
+
             return;
         }
 
@@ -633,34 +682,34 @@ class PointOfSale extends Page
 
             // Calculate totals directly from cart
             $calculatedSubtotal = collect($this->cart)->sum(function ($item) {
-                return (float)$item['selling_price'] * (int)$item['quantity'];
+                return (float) $item['selling_price'] * (int) $item['quantity'];
             });
-            
+
             $calculatedDiscount = 0;
             if ($this->discountValue > 0) {
                 if ($this->discountType === 'percentage') {
-                    $calculatedDiscount = ($calculatedSubtotal * (float)$this->discountValue) / 100;
+                    $calculatedDiscount = ($calculatedSubtotal * (float) $this->discountValue) / 100;
                 } else {
-                    $calculatedDiscount = min((float)$this->discountValue, $calculatedSubtotal);
+                    $calculatedDiscount = min((float) $this->discountValue, $calculatedSubtotal);
                 }
             }
-            
+
             $taxableAmount = $calculatedSubtotal - $calculatedDiscount;
-            $calculatedTax = $taxableAmount * (float)$this->taxRate;
+            $calculatedTax = $taxableAmount * (float) $this->taxRate;
             $calculatedTotal = $taxableAmount + $calculatedTax;
-            
+
             // Validate calculated total
-            if (!is_numeric($calculatedTotal) || $calculatedTotal <= 0) {
-                throw new \Exception('Invalid calculated total: ' . $calculatedTotal);
+            if (! is_numeric($calculatedTotal) || $calculatedTotal <= 0) {
+                throw new \Exception('Invalid calculated total: '.$calculatedTotal);
             }
-            
+
             // CRITICAL: Ensure calculated total is NOT the phone number
-            if ($calculatedTotal == $this->mpesaPhoneNumber || (string)$calculatedTotal === (string)$this->mpesaPhoneNumber) {
-                throw new \Exception('Calculated total matches phone number! Total: ' . $calculatedTotal . ', Phone: ' . $this->mpesaPhoneNumber);
+            if ($calculatedTotal == $this->mpesaPhoneNumber || (string) $calculatedTotal === (string) $this->mpesaPhoneNumber) {
+                throw new \Exception('Calculated total matches phone number! Total: '.$calculatedTotal.', Phone: '.$this->mpesaPhoneNumber);
             }
 
             // Generate invoice number
-            $invoiceNumber = 'SAL-POS-' . str_pad(Sale::max('id') + 1 ?? 1, 6, '0', STR_PAD_LEFT);
+            $invoiceNumber = 'SAL-POS-'.str_pad(Sale::max('id') + 1 ?? 1, 6, '0', STR_PAD_LEFT);
 
             // Create sale with pending status
             $sale = Sale::create([
@@ -681,8 +730,8 @@ class PointOfSale extends Page
             // Create sale items and update stock
             foreach ($this->cart as $cartItem) {
                 $medicine = Medicine::find($cartItem['medicine_id']);
-                
-                if (!$medicine || $medicine->stock_quantity < $cartItem['quantity']) {
+
+                if (! $medicine || $medicine->stock_quantity < $cartItem['quantity']) {
                     throw new \Exception("Insufficient stock for {$medicine->name}");
                 }
 
@@ -706,22 +755,22 @@ class PointOfSale extends Page
             }
 
             // Create pending payment - ensure amount is numeric
-            $paymentAmount = (float)$calculatedTotal;
-            if (!is_numeric($paymentAmount) || $paymentAmount <= 0) {
-                throw new \Exception('Invalid payment amount: ' . $calculatedTotal);
+            $paymentAmount = (float) $calculatedTotal;
+            if (! is_numeric($paymentAmount) || $paymentAmount <= 0) {
+                throw new \Exception('Invalid payment amount: '.$calculatedTotal);
             }
-            
+
             // Determine payment method (check both paymentMethod and handle legacy mpesaPhoneNumber)
-            $paymentMethodLower = strtolower(trim((string)($this->paymentMethod ?? 'mpesa')));
+            $paymentMethodLower = strtolower(trim((string) ($this->paymentMethod ?? 'mpesa')));
             $isBankPaybill = $paymentMethodLower === 'bank_paybill';
             $paymentMethod = $isBankPaybill ? 'bank_paybill' : 'mpesa';
-            
+
             $payment = Payment::create([
                 'sale_id' => $sale->id,
                 'payment_method' => $paymentMethod,
                 'amount' => $paymentAmount,
-                'reference_number' => ($isBankPaybill ? 'BANK-PAYBILL-PENDING-' : 'MPESA-PENDING-') . strtoupper(uniqid()),
-                'notes' => ($isBankPaybill ? 'Bank Paybill' : 'M-Pesa') . ' STK Push - Pending',
+                'reference_number' => ($isBankPaybill ? 'BANK-PAYBILL-PENDING-' : 'MPESA-PENDING-').strtoupper(uniqid()),
+                'notes' => ($isBankPaybill ? 'Bank Paybill' : 'M-Pesa').' STK Push - Pending',
                 'status' => 'pending',
             ]);
 
@@ -730,7 +779,7 @@ class PointOfSale extends Page
             // Store sale ID for polling
             $this->pendingMpesaSaleId = $sale->id;
             $this->pendingStkSaleId = $sale->id;
-            
+
             // Initiate STK Push (M-Pesa or Bank Paybill)
             if ($isBankPaybill) {
                 $this->initiateBankPaybillSTKPush($sale->id, $phoneNumber, $paymentAmount, $invoiceNumber);
@@ -744,7 +793,7 @@ class PointOfSale extends Page
             $this->stkProcessing = false;
             $this->mpesaStatus = 'failed';
             $this->stkStatus = 'failed';
-            $this->dispatch('notify', message: 'Error initiating payment: ' . $e->getMessage(), type: 'error');
+            $this->dispatch('notify', message: 'Error initiating payment: '.$e->getMessage(), type: 'error');
         }
     }
 
@@ -753,17 +802,17 @@ class PointOfSale extends Page
         try {
             // M-Pesa requires integer amounts (no decimals)
             $amount = (int) round((float) $amount);
-            
+
             // Get bank configuration from settings
             $bankCode = \App\Models\Setting::get('bank_code', 'kcb');
             $bankAccountNumber = \App\Models\Setting::get('bank_account_number', '');
-            
+
             // Always use the business account from settings as the account reference
             // The $phoneNumber is only for sending the STK push to the customer's phone
             $accountReference = $bankAccountNumber;
-            
-            $url = config('app.url') . '/api/bank-paybill/stk-push';
-            
+
+            $url = config('app.url').'/api/bank-paybill/stk-push';
+
             $response = \Illuminate\Support\Facades\Http::post($url, [
                 'amount' => $amount,
                 'phonenumber' => $phoneNumber,
@@ -808,7 +857,7 @@ class PointOfSale extends Page
             $this->mpesaProcessing = false;
             $this->stkStatus = 'failed';
             $this->mpesaStatus = 'failed';
-            $this->dispatch('notify', message: 'Error: ' . $e->getMessage(), type: 'error');
+            $this->dispatch('notify', message: 'Error: '.$e->getMessage(), type: 'error');
         }
     }
 
@@ -817,7 +866,7 @@ class PointOfSale extends Page
         try {
             // M-Pesa requires integer amounts (no decimals)
             $amount = (int) round((float) $amount);
-            
+
             $response = Mpesa::stkpush(
                 phonenumber: $phoneNumber,
                 amount: $amount,
@@ -864,7 +913,7 @@ class PointOfSale extends Page
             $this->stkProcessing = false;
             $this->mpesaStatus = 'failed';
             $this->stkStatus = 'failed';
-            $this->dispatch('notify', message: 'Error: ' . $e->getMessage(), type: 'error');
+            $this->dispatch('notify', message: 'Error: '.$e->getMessage(), type: 'error');
         }
     }
 
@@ -876,7 +925,7 @@ class PointOfSale extends Page
 
     public function checkSTKPaymentStatus()
     {
-        if ((!$this->pendingMpesaSaleId && !$this->pendingStkSaleId) || 
+        if ((! $this->pendingMpesaSaleId && ! $this->pendingStkSaleId) ||
             ($this->mpesaStatus !== 'pending' && $this->stkStatus !== 'pending')) {
             return;
         }
@@ -905,14 +954,14 @@ class PointOfSale extends Page
                 $this->lastSaleItems = $sale->items;
                 $this->lastCustomer = $sale->customer;
                 $this->lastPayment = $payment;
-                
+
                 // Close payment modal and show receipt
                 $this->showPaymentModal = false;
                 $this->showReceiptModal = true;
-                
+
                 // Reset cart
                 $this->resetCart();
-                
+
                 $this->dispatch('notify', message: 'M-Pesa payment completed successfully!', type: 'success');
             }
         } else {
@@ -930,7 +979,7 @@ class PointOfSale extends Page
                 $this->stkProcessing = false;
                 $this->pendingMpesaSaleId = null;
                 $this->pendingStkSaleId = null;
-                $this->dispatch('notify', message: 'M-Pesa payment failed: ' . ($stkPush->result_desc ?? 'Unknown error'), type: 'error');
+                $this->dispatch('notify', message: 'M-Pesa payment failed: '.($stkPush->result_desc ?? 'Unknown error'), type: 'error');
             }
         }
     }
@@ -959,6 +1008,7 @@ class PointOfSale extends Page
         $this->search = '';
         $this->searchResults = [];
         $this->showSearchResults = false;
+        $this->resetLineSpendByMedicine();
     }
 
     public function clearCart()
@@ -979,15 +1029,14 @@ class PointOfSale extends Page
         $this->lastCustomer = null;
         $this->lastPayment = null;
     }
-    
+
     public function closePaymentModal()
     {
         $this->showPaymentModal = false;
     }
-    
+
     public function closePhoneModal()
     {
         $this->showPhoneModal = false;
     }
 }
-

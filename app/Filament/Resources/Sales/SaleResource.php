@@ -15,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class SaleResource extends Resource
@@ -42,6 +43,12 @@ class SaleResource extends Resource
     public static function table(Table $table): Table
     {
         return SalesTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['items.medicine']);
     }
 
     public static function getRelations(): array

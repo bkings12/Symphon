@@ -36,4 +36,8 @@ class SaleItem extends Model
         return $this->belongsTo(Medicine::class);
     }
 
+    public function stockBatch(): BelongsTo
+    {
+        return $this->belongsTo(StockBatch::class);
+    }
 }
