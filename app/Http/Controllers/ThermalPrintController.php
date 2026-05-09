@@ -6,6 +6,7 @@ use App\Models\Sale;
 use App\Services\ThermalPrinterService;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ThermalPrintController extends Controller
 {
@@ -25,6 +26,12 @@ class ThermalPrintController extends Controller
 
             restore_error_handler();
 
+            Log::info('Thermal print completed', [
+                'sale_id' => $sale->id,
+                'invoice' => $sale->invoice_number,
+                'path' => 'http_post',
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Receipt printed successfully',
@@ -33,7 +40,14 @@ class ThermalPrintController extends Controller
         } catch (\Throwable $e) {
             restore_error_handler();
 
-            // Return error without logging to avoid permission issues
+            Log::warning('Thermal print failed', [
+                'sale_id' => $sale->id,
+                'invoice' => $sale->invoice_number,
+                'path' => 'http_post',
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),

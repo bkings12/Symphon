@@ -116,7 +116,8 @@ class ThermalPrinterService
             $this->printer->setJustification(Printer::JUSTIFY_LEFT);
             $this->printer->text('Invoice #: '.$sale->invoice_number."\n");
             $this->printer->text('Date: '.$sale->sale_date->format('d/m/Y H:i')."\n");
-            $this->printer->text('Cashier: '.$sale->user->name."\n");
+            $cashierName = $sale->user?->name ?? '—';
+            $this->printer->text('Cashier: '.$cashierName."\n");
 
             if ($sale->customer) {
                 $this->printer->text('Customer: '.$sale->customer->name."\n");
@@ -132,17 +133,18 @@ class ThermalPrinterService
             $this->printer->text(sprintf("%-20s %4s %8s %10s\n", 'Item', 'Qty', 'Price', 'Total'));
             $this->printer->text(str_repeat('-', 48)."\n");
 
-            // Items
+            // Items (medicine may be missing if catalog row was deleted)
             foreach ($sale->items as $item) {
-                $name = substr($item->medicine->name, 0, 20);
-                $qty = $item->quantity;
-                $price = number_format($item->unit_price, 2);
-                $total = number_format($item->total_price, 2);
+                $medicine = $item->medicine;
+                $name = substr($medicine?->name ?? 'Line item', 0, 20);
+                $qty = (int) $item->quantity;
+                $price = number_format((float) $item->unit_price, 2);
+                $total = number_format((float) $item->total_price, 2);
 
                 $this->printer->text(sprintf("%-20s %4d %8s %10s\n", $name, $qty, $price, $total));
 
-                if ($item->medicine->generic_name) {
-                    $generic = substr($item->medicine->generic_name, 0, 30);
+                if ($medicine?->generic_name) {
+                    $generic = substr((string) $medicine->generic_name, 0, 30);
                     $this->printer->text('  '.$generic."\n");
                 }
             }
@@ -172,13 +174,14 @@ class ThermalPrinterService
             // Payment Info
             $payment = $sale->payments->first();
             if ($payment) {
-                $this->printer->text('Payment Method: '.strtoupper($payment->payment_method)."\n");
+                $method = strtoupper((string) ($payment->payment_method ?? ''));
+                $this->printer->text('Payment Method: '.$method."\n");
                 $this->printer->text(sprintf("%-32s %12s\n", 'Amount Paid:', format_currency($payment->amount)));
 
                 // Always show change for cash payments, show for others only if amount > total
                 $showChange = false;
                 $change = 0;
-                if (strtolower($payment->payment_method) === 'cash') {
+                if (strtolower((string) ($payment->payment_method ?? '')) === 'cash') {
                     $change = max(0, $payment->amount - $sale->total_amount);
                     $showChange = true;
                 } elseif ($payment->amount > $sale->total_amount) {

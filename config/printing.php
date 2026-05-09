@@ -4,6 +4,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | CUPS / raw ESC/POS
+    |--------------------------------------------------------------------------
+    |
+    | If the physical slip is blank but the job "succeeds", the CUPS queue is
+    | often not set to raw / ESC-POS passthrough. Use a driver or queue that
+    | sends bytes unchanged to the thermal printer (see THERMAL_PRINTER_SETUP.md).
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
     | Printer Connection Type
     |--------------------------------------------------------------------------
     |
@@ -69,5 +80,18 @@ return [
 
     'copies' => env('PRINTER_COPIES', 1),
 
-];
+    /*
+    |--------------------------------------------------------------------------
+    | Filament reprint uses HTTP route (optional)
+    |--------------------------------------------------------------------------
+    |
+    | When true, Filament "Reprint receipt" POSTs to the same /thermal-print/{sale}
+    | route as the POS (same middleware, CSRF, and JSON handling). Requires a web
+    | session. Default false: in-process ThermalPrinterService::printSaleReceipt
+    | is used (identical bytes; easier in tests and queues).
+    |
+    */
 
+    'filament_reprint_via_http' => env('FILAMENT_THERMAL_REPRINT_VIA_HTTP', false),
+
+];
